@@ -1,4 +1,5 @@
 import { loadConfig } from "./config.js";
+import { sendHeartbeat } from "./heartbeat.js";
 import { KumaClient } from "./kuma.js";
 import { createLogger, type Logger } from "./logger.js";
 import { runOnce } from "./reconcile.js";
@@ -37,10 +38,41 @@ const cycle = async (
     logger,
   );
 
+  // A dry run proves nothing was applied, so it must not report the sync as healthy — otherwise
+  // leaving DRY_RUN on forever would look green while no monitor is ever created.
+  const pushUrl = config.DRY_RUN ? undefined : config.KUMA_PUSH_URL;
+  if (config.DRY_RUN && config.KUMA_PUSH_URL) {
+    logger.debug("dry run — heartbeat skipped");
+  }
+  const startedAt = performance.now();
+
   try {
     await kuma.connect();
     await kuma.login();
-    await runOnce(config, kuma, logger);
+    const plan = await runOnce(config, kuma, logger);
+
+    await sendHeartbeat(
+      pushUrl,
+      {
+        status: "up",
+        message: `created=${plan.create.length} updated=${plan.update.length} retired=${plan.retire.length} managed=${plan.managedCount}`,
+        durationMs: performance.now() - startedAt,
+      },
+      logger,
+    );
+  } catch (error) {
+    // Report the failure actively rather than waiting for Kuma's push timeout. If Kuma itself is
+    // what is unreachable, this ping fails too and the timeout covers us.
+    await sendHeartbeat(
+      pushUrl,
+      {
+        status: "down",
+        message: error instanceof Error ? error.message : String(error),
+        durationMs: performance.now() - startedAt,
+      },
+      logger,
+    );
+    throw error;
   } finally {
     kuma.close();
   }

@@ -26,6 +26,12 @@ const configSchema = z.object({
   /** Base32 TOTP secret, only if 2FA is enabled on the Kuma account. */
   KUMA_TOTP_SECRET: z.string().min(1).optional(),
 
+  /**
+   * Push URL of a Kuma push monitor, so Kuma alerts when kuma-sync itself stops running.
+   * Without it the sync is the blind spot in your alerting.
+   */
+  KUMA_PUSH_URL: z.string().url().optional(),
+
   /** Comma separated Kuma notification ids to attach to every managed monitor. */
   KUMA_NOTIFICATION_IDS: z
     .string()

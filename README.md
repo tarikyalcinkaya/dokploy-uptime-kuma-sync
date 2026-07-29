@@ -102,6 +102,21 @@ Both refuse the whole run rather than doing partial damage:
 
 `ON_REMOVE=pause` (default) keeps the monitor and its history. `delete` is available but permanent.
 
+### Watching the watcher
+
+If kuma-sync silently stops — broken cron, deleted image, rotated password — new domains stop getting
+monitors and nothing tells you. The sync becomes the blind spot in your own alerting.
+
+`KUMA_PUSH_URL` closes that loop with the tool you already run. Create a **Push** monitor in Kuma, set
+its heartbeat interval comfortably above your cron interval (cron every 15 min → heartbeat 1800s),
+and put the push URL in `.env`. Every applied cycle pings it with a summary
+(`created=2 updated=0 retired=1`); a failed cycle pings `status=down` with the error, so you hear
+about it immediately instead of waiting for the timeout. If Kuma itself is what is unreachable the
+ping fails too — and the missed heartbeat alerts you anyway.
+
+Heartbeats are **skipped while `DRY_RUN=true`**. A dry run applies nothing, so reporting it as healthy
+would let a forgotten `DRY_RUN=true` look green forever while no monitor is ever created.
+
 ## Configuration
 
 See `.env.example`. Worth calling out:
@@ -109,6 +124,7 @@ See `.env.example`. Worth calling out:
 | Variable | Note |
 | --- | --- |
 | `KUMA_NOTIFICATION_IDS` | **Set this.** Without it monitors are created but nothing alerts you. |
+| `KUMA_PUSH_URL` | **Set this too.** Kuma push monitor that tells you when the sync itself dies. |
 | `KUMA_TOTP_SECRET` | Only if 2FA is on the Kuma account. A cron job cannot type a code, so the base32 secret is needed to generate one. |
 | `DRY_RUN` | Defaults to `true`. |
 | `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise. |

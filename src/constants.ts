@@ -12,6 +12,9 @@ export const CALL_TIMEOUT_MS = 20_000;
 /** How long to wait for Kuma to push the initial `monitorList` after login. */
 export const MONITOR_LIST_TIMEOUT_MS = 30_000;
 
+/** Budget for the push ping to Kuma. */
+export const HEARTBEAT_TIMEOUT_MS = 10_000;
+
 /** Postgres connection/statement budget. */
 export const DB_TIMEOUT_SECONDS = 10;
 
