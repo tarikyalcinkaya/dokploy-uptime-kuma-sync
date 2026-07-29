@@ -41,16 +41,34 @@ const DOMAIN_QUERY = `
 	ORDER BY d."createdAt"
 `;
 
+/**
+ * `Invalid URL` from the driver says nothing about which of the two likely causes it is, and both
+ * are easy to hit, so name them.
+ */
+const connect = (databaseUrl: string): ReturnType<typeof postgres> => {
+  try {
+    return postgres(databaseUrl, {
+      max: 1,
+      connect_timeout: DB_TIMEOUT_SECONDS,
+      idle_timeout: DB_TIMEOUT_SECONDS,
+      prepare: false,
+      onnotice: () => {},
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `DATABASE_URL could not be parsed (${reason}). Two things usually cause this: ` +
+        "1) quotes — `docker run --env-file` does not strip them, so write the line unquoted; " +
+        "2) special characters in the password, which must be percent-encoded " +
+        "(@ = %40, # = %23, : = %3A, / = %2F, ? = %3F).",
+    );
+  }
+};
+
 export const fetchDokployDomains = async (
   databaseUrl: string,
 ): Promise<DokployDomain[]> => {
-  const sql = postgres(databaseUrl, {
-    max: 1,
-    connect_timeout: DB_TIMEOUT_SECONDS,
-    idle_timeout: DB_TIMEOUT_SECONDS,
-    prepare: false,
-    onnotice: () => {},
-  });
+  const sql = connect(databaseUrl);
 
   try {
     const rows = await sql.unsafe<DokployDomain[]>(DOMAIN_QUERY);

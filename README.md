@@ -129,6 +129,24 @@ See `.env.example`. Worth calling out:
 | `DRY_RUN` | Defaults to `true`. |
 | `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise. |
 
+## Troubleshooting
+
+**`Invalid URL` / `could not read domains`** — `DATABASE_URL` did not parse. Two causes, both common:
+quotes (`docker run --env-file` keeps them, unlike Node's `--env-file`), or special characters in the
+password that need percent-encoding (`@` → `%40`, `#` → `%23`, `:` → `%3A`, `/` → `%2F`, `?` → `%3F`).
+Quotes are stripped defensively now, so in practice this means the password.
+
+**`getaddrinfo ENOTFOUND <something odd>`** — an unencoded `@` in the password split the connection
+string early, so the driver is resolving a fragment of your password as the hostname. Percent-encode
+it.
+
+**`ECONNREFUSED`** — the URL is fine but nothing is listening. Check you are on `dokploy-network`
+(`docker run --network dokploy-network …`) and that the host is `dokploy-postgres`, not `localhost`.
+
+**`Kuma requires a 2FA token`** — set `KUMA_TOTP_SECRET` to the account's base32 secret.
+
+**`Kuma rejected monitor: <msg>`** — the `add` payload was refused. The message names the field.
+
 ## Known limitations
 
 - **Untested against a live Kuma.** The reconcile logic is unit tested, but the Socket.IO payload

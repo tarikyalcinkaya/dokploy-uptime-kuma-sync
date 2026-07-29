@@ -10,15 +10,44 @@ const logLevel = z
   .enum(["trace", "debug", "info", "warn", "error", "fatal"])
   .default("info");
 
+/**
+ * `docker run --env-file` does NOT strip quotes — `KEY="value"` arrives with the quote characters
+ * still attached, which turns a perfectly good connection string into an unparseable one. Node's
+ * own `--env-file` and dotenv do strip them, so the same file behaves differently depending on how
+ * it is loaded. Normalising here makes both work.
+ */
+export const unquote = (value: string): string => {
+  const quoted =
+    value.length >= 2 &&
+    ((value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'")));
+  return quoted ? value.slice(1, -1) : value;
+};
+
+const readEnv = (): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(process.env)
+      .filter((entry): entry is [string, string] => entry[1] !== undefined)
+      .map(([key, value]) => [key, unquote(value)]),
+  );
+
+const databaseUrl = z
+  .string()
+  .min(1)
+  .refine((value) => /^postgres(ql)?:\/\//.test(value), {
+    message:
+      "must start with postgres:// — note that `docker run --env-file` keeps quotes, so write it unquoted: DATABASE_URL=postgres://user:pass@dokploy-postgres:5432/dokploy",
+  });
+
 /** Just enough to read Dokploy, so `npm run domains` works before any Kuma credentials exist. */
 const databaseConfigSchema = z.object({
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: databaseUrl,
   LOG_LEVEL: logLevel,
 });
 
 const configSchema = z.object({
   /** Dokploy's Postgres. A read-only role is strongly recommended. */
-  DATABASE_URL: z.string().min(1),
+  DATABASE_URL: databaseUrl,
 
   KUMA_URL: z.string().url(),
   KUMA_USERNAME: z.string().min(1),
@@ -74,7 +103,7 @@ const describeFailure = (error: z.ZodError): string =>
     .join("\n");
 
 export const loadDatabaseConfig = (): DatabaseConfig => {
-  const parsed = databaseConfigSchema.safeParse(process.env);
+  const parsed = databaseConfigSchema.safeParse(readEnv());
   if (!parsed.success) {
     throw new Error(`Invalid configuration:\n${describeFailure(parsed.error)}`);
   }
@@ -82,7 +111,7 @@ export const loadDatabaseConfig = (): DatabaseConfig => {
 };
 
 export const loadConfig = (): Config => {
-  const parsed = configSchema.safeParse(process.env);
+  const parsed = configSchema.safeParse(readEnv());
 
   if (!parsed.success) {
     throw new Error(`Invalid configuration:\n${describeFailure(parsed.error)}`);
