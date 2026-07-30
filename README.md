@@ -61,23 +61,23 @@ Once the plan looks right, set `DRY_RUN=false`.
 database is reachable *only* from inside `dokploy-network`. There is no port to tunnel to from a
 laptop.
 
-**As a Dokploy Compose service** (recommended) — Postgres stays private, reachable as
-`dokploy-postgres:5432`. Set `RUN_MODE=loop`; see `docker-compose.yml`.
-
-**As a plain container**, which is the easiest way to try it first:
+**Run it as a long-lived container** — `RUN_MODE=loop` with a restart policy, which is what
+`docker-compose.yml` sets up:
 
 ```bash
-docker build -t kuma-sync .
-docker run --rm --network dokploy-network --env-file .env kuma-sync node dist/bin/domains.js
-docker run --rm --network dokploy-network --env-file .env kuma-sync node dist/bin/inspect.js
-docker run --rm --network dokploy-network --env-file .env kuma-sync   # reconcile, honours DRY_RUN
+docker compose up -d --build
+docker compose ps
+docker compose logs -f
 ```
 
-**As a cron job** — `RUN_MODE=once`, one reconcile per invocation:
+**Do not run it from cron with `docker run --rm`.** Dokploy's Docker Cleanup executes
+`docker image prune --all --force`, and `--all` deletes every image *not referenced by a container* —
+not just dangling ones. A one-shot `--rm` container leaves no reference between runs, so the image
+gets deleted and the next cron run dies with `pull access denied`. A long-running container holds a
+reference, so prune cannot touch it.
 
-```
-*/15 * * * * cd /opt/kuma-sync && node --env-file=.env dist/index.js
-```
+The one-off commands are still the right way to work through the setup ladder above, they just should
+not be what runs on a schedule.
 
 ## How reconciliation works
 
