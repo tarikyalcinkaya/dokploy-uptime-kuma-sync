@@ -21,8 +21,11 @@ Python one (`uptime-kuma-api`) last shipped in September 2023 and documents supp
 note that the Docker tag `latest` still points at the 1.x line; 2.x lives under `2` / `2.4.0` / `next`.
 
 Domains are read straight from Dokploy's Postgres. That couples this to Dokploy's internal schema,
-which is the weakest part of the design. If [the domain-event proposal](../../oss/dokploy) lands
-upstream, this switches to receiving webhooks and the database read goes away.
+which is the weakest part of the design. If
+[Dokploy#4938](https://github.com/Dokploy/dokploy/issues/4938) lands upstream, this switches to
+receiving webhooks and the database read goes away.
+
+More on the reasoning behind all of this in [DESIGN.md](DESIGN.md).
 
 ## Setup
 
