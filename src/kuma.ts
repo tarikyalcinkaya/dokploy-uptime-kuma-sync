@@ -44,7 +44,7 @@ export interface KumaCredentials {
  * `add`, `editMonitor`, `pauseMonitor`, `resumeMonitor`, `deleteMonitor`) instead of depending on a
  * wrapper library, so there is less surface to break on a Kuma upgrade.
  *
- * Verified against the 1.23.x event names. Kuma 2.x is a different major and is not covered.
+ * Exercised against Kuma 1.23.17. Kuma 2.x is a different major and is not covered.
  */
 export class KumaClient {
   private socket: Socket | null = null;

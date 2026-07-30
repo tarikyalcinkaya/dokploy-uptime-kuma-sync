@@ -150,11 +150,17 @@ it.
 
 **`Kuma rejected monitor: <msg>`** — the `add` payload was refused. The message names the field.
 
-## Known limitations
+## What has been exercised
 
-- **Untested against a live Kuma.** The reconcile logic is unit tested, but the Socket.IO payload
-  shape for `add` has not been exercised against a real server. If Kuma rejects a monitor it comes
-  back as `Kuma rejected monitor: <msg>` — that message is the thing to read first.
+Running against a live Kuma 1.23.17 alongside a production Dokploy install: login (including the
+notification-id lookup), reading domains, the dry run, creating monitors with notifications attached,
+and the push heartbeat.
+
+The paths that unit tests cover but a live server has not yet exercised: `editMonitor` (a host
+rename), retirement via `pauseMonitor`, `ON_REMOVE=delete`, and the guards actually firing. If Kuma
+refuses something it surfaces as `Kuma rejected monitor: <msg>`, and that message names the field.
+
+## Known limitations
 - Kuma tags are not used; ownership lives in the description instead, which avoids the separate tag
   API entirely. Tags could be added later if grouping in the Kuma UI becomes useful.
 - No monitor deletion on `ON_REMOVE=pause` means paused monitors accumulate. Prune them by hand, or
