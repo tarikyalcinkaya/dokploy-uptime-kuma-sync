@@ -1,4 +1,4 @@
-# kuma-sync
+# dokploy-uptime-kuma-sync
 
 Keeps Uptime Kuma's HTTP monitors in sync with the domains Dokploy serves.
 
@@ -107,8 +107,8 @@ Both refuse the whole run rather than doing partial damage:
 
 ### Watching the watcher
 
-If kuma-sync silently stops — broken cron, deleted image, rotated password — new domains stop getting
-monitors and nothing tells you. The sync becomes the blind spot in your own alerting.
+If the sync silently stops — broken cron, deleted image, rotated password — new domains stop getting
+monitors and nothing tells you. It becomes the blind spot in your own alerting.
 
 `KUMA_PUSH_URL` closes that loop with the tool you already run. Create a **Push** monitor in Kuma, set
 its heartbeat interval comfortably above your cron interval (cron every 15 min → heartbeat 1800s),

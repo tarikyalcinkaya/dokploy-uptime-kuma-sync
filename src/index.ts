@@ -89,7 +89,7 @@ const main = async (): Promise<void> => {
       onRemove: config.ON_REMOVE,
       kuma: config.KUMA_URL,
     },
-    "kuma-sync starting",
+    "dokploy-uptime-kuma-sync starting",
   );
 
   if (config.RUN_MODE === "once") {
@@ -128,7 +128,7 @@ main().catch((error: unknown) => {
   const logger = createLogger("error");
   logger.fatal(
     { err: error instanceof Error ? error.message : String(error) },
-    "kuma-sync failed to start",
+    "dokploy-uptime-kuma-sync failed to start",
   );
   process.exitCode = 1;
 });

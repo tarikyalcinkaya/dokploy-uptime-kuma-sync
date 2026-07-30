@@ -1,7 +1,9 @@
 /** Marker written into a Kuma monitor's description so we can recognise our own monitors. */
 export const MANAGED_MARKER_PREFIX = "dokploy:domainId=";
 
-export const MANAGED_NOTICE = "Managed by kuma-sync — do not edit manually.";
+/** Name-free on purpose: it is written into live monitor descriptions and should survive a rename. */
+export const MANAGED_NOTICE =
+  "Managed automatically from Dokploy — do not edit manually.";
 
 /** Socket.IO connection handshake budget. */
 export const CONNECT_TIMEOUT_MS = 15_000;

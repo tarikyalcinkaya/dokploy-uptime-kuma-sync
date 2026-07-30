@@ -1,8 +1,8 @@
 # Deploy this as a Docker Compose service inside Dokploy itself, on the Dokploy server.
-# That way Postgres stays private: kuma-sync reaches it over dokploy-network as
+# That way Postgres stays private: dokploy-uptime-kuma-sync reaches it over dokploy-network as
 # `dokploy-postgres:5432` and the database never needs to be exposed.
 services:
-  kuma-sync:
+  dokploy-uptime-kuma-sync:
     build: .
     restart: unless-stopped
     environment:

@@ -56,7 +56,7 @@ const configSchema = z.object({
   KUMA_TOTP_SECRET: z.string().min(1).optional(),
 
   /**
-   * Push URL of a Kuma push monitor, so Kuma alerts when kuma-sync itself stops running.
+   * Push URL of a Kuma push monitor, so Kuma alerts when dokploy-uptime-kuma-sync itself stops running.
    * Without it the sync is the blind spot in your alerting.
    */
   KUMA_PUSH_URL: z.string().url().optional(),

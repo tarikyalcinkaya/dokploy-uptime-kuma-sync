@@ -1,5 +1,5 @@
 /**
- * Prints the domains kuma-sync would manage. Needs DATABASE_URL only — no Kuma credentials, no
+ * Prints the domains dokploy-uptime-kuma-sync would manage. Needs DATABASE_URL only — no Kuma credentials, no
  * network calls to Kuma. Run this first to confirm the query sees what you expect.
  */
 import { loadDatabaseConfig } from "../config.js";

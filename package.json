@@ -1,5 +1,5 @@
 {
-	"name": "kuma-sync",
+	"name": "dokploy-uptime-kuma-sync",
 	"version": "0.1.0",
 	"private": true,
 	"type": "module",

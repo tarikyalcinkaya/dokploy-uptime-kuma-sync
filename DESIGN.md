@@ -1,6 +1,6 @@
 # Design notes
 
-Why kuma-sync is built the way it is. For installation and usage, see the [README](README.md).
+Why this is built the way it is. For installation and usage, see the [README](README.md).
 
 ## Shape
 
@@ -114,6 +114,6 @@ Reading Dokploy's Postgres directly is the weakest part of the design — it cou
 internal schema that is free to change.
 
 [Dokploy#4938](https://github.com/Dokploy/dokploy/issues/4938) proposes domain lifecycle triggers for
-Dokploy's existing notification system. If that lands, kuma-sync can consume a webhook instead: the
+Dokploy's existing notification system. If that lands, the sync can consume a webhook instead: the
 database read disappears and the reconcile interval stops being the reaction time. The reconcile loop
 stays regardless — webhooks drift, and a periodic full comparison is what makes the result correct.

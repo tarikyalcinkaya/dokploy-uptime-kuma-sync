@@ -22,7 +22,7 @@ export const buildHeartbeatUrl = (
 };
 
 /**
- * Pings a Kuma push monitor so Kuma notices when kuma-sync itself stops working.
+ * Pings a Kuma push monitor so Kuma notices when dokploy-uptime-kuma-sync itself stops working.
  *
  * Without this the sync is the blind spot in the alerting: if it silently dies, new domains stop
  * getting monitors and nothing tells you.
