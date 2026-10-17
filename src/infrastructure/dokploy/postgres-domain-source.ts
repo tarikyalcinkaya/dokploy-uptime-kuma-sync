@@ -1,0 +1,105 @@
+import postgres from 'postgres'
+import { z } from 'zod'
+import type { DokployDomain } from '../../domain/dokploy-domain.js'
+import type { IDomainSource } from '../../domain/ports.js'
+import { errorMessage } from '../../shared/errors.js'
+import { DB_STATEMENT_TIMEOUT_MS, DB_TIMEOUT_SECONDS } from '../timeouts.js'
+
+// `to_jsonb` reads columns that older Dokploy releases lack as NULL instead of failing the query.
+// Preview domains come and go with pull requests and would fill Kuma with monitors that die within days.
+type Sql = ReturnType<typeof postgres>
+
+const queryDomains = (sql: Sql) => sql`
+	SELECT
+		d."domainId"      AS "domainId",
+		d.host            AS host,
+		d.https           AS https,
+		d.path            AS path,
+		d."domainType"    AS "domainType",
+		COALESCE(a.name, c.name) AS "serviceName",
+		e.name            AS "environmentName",
+		(to_jsonb(e)->>'isDefault')::boolean AS "isDefaultEnvironment",
+		p."projectId"     AS "projectId",
+		p.name            AS "projectName",
+		COALESCE(to_jsonb(d)->'middlewares', '[]'::jsonb) AS middlewares
+	FROM domain d
+	LEFT JOIN application a ON a."applicationId" = d."applicationId"
+	LEFT JOIN compose     c ON c."composeId"     = d."composeId"
+	LEFT JOIN environment e ON e."environmentId" = COALESCE(a."environmentId", c."environmentId")
+	LEFT JOIN project     p ON p."projectId"     = e."projectId"
+	WHERE d."previewDeploymentId" IS NULL
+		AND d."domainType" IS DISTINCT FROM 'preview'
+		AND d.host IS NOT NULL
+		AND btrim(d.host) <> ''
+	ORDER BY d."createdAt", d."domainId"
+`
+
+const domainRowSchema = z.object({
+  domainId: z.string().min(1),
+  host: z.string().min(1),
+  https: z.boolean(),
+  path: z.string().nullable(),
+  domainType: z.string().nullable(),
+  serviceName: z.string().nullable(),
+  environmentName: z.string().nullable(),
+  isDefaultEnvironment: z.boolean().nullable(),
+  projectId: z.string().nullable(),
+  projectName: z.string().nullable(),
+  middlewares: z
+    .array(z.string())
+    .nullable()
+    .transform((value) => value ?? []),
+})
+
+const toDomain = ({ https, ...row }: z.infer<typeof domainRowSchema>): DokployDomain => ({
+  ...row,
+  isHttps: https,
+})
+
+export class PostgresDomainSource implements IDomainSource {
+  readonly #databaseUrl: string
+  readonly #statementTimeoutMs: number
+
+  constructor(databaseUrl: string, statementTimeoutMs = DB_STATEMENT_TIMEOUT_MS) {
+    this.#databaseUrl = databaseUrl
+    this.#statementTimeoutMs = statementTimeoutMs
+  }
+
+  async listDomains(): Promise<DokployDomain[]> {
+    const sql = this.#connect()
+    try {
+      const rows = await queryDomains(sql)
+      return z
+        .array(domainRowSchema)
+        .parse([...rows])
+        .map(toDomain)
+    } finally {
+      await sql.end({ timeout: DB_TIMEOUT_SECONDS })
+    }
+  }
+
+  // The driver's bare `Invalid URL` hides which of the two usual causes it is, so name both.
+  #connect(): Sql {
+    try {
+      return postgres(this.#databaseUrl, {
+        max: 1,
+        connect_timeout: DB_TIMEOUT_SECONDS,
+        idle_timeout: DB_TIMEOUT_SECONDS,
+        prepare: false,
+        // Bounds a query stuck behind a lock; in loop mode it would otherwise hang the worker for good.
+        connection: {
+          statement_timeout: this.#statementTimeoutMs,
+          default_transaction_read_only: true,
+        },
+        onnotice: () => undefined,
+      })
+    } catch (error) {
+      throw new Error(
+        `DATABASE_URL could not be parsed (${errorMessage(error)}). Two things usually cause this: ` +
+          '1) quotes — `docker run --env-file` does not strip them, so write the line unquoted; ' +
+          '2) special characters in the password, which must be percent-encoded ' +
+          '(@ = %40, # = %23, : = %3A, / = %2F, ? = %3F).',
+      )
+    }
+  }
+}

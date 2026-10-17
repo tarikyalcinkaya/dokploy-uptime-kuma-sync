@@ -1,39 +1,27 @@
-/**
- * Prints the domains dokploy-uptime-kuma-sync would manage. Needs DATABASE_URL only — no Kuma credentials, no
- * network calls to Kuma. Run this first to confirm the query sees what you expect.
- */
-import { loadDatabaseConfig } from "../config.js";
-import {
-  domainToMonitorName,
-  domainToUrl,
-  fetchDokployDomains,
-} from "../dokploy.js";
-import { createLogger } from "../logger.js";
+// Prints the domains the sync would manage. Needs DATABASE_URL only — Kuma is never contacted.
+import { listManagedDomains } from '../application/list-managed-domains.js'
+import { loadDatabaseConfig, toExclusions } from '../infrastructure/config.js'
+import { PostgresDomainSource } from '../infrastructure/dokploy/postgres-domain-source.js'
+import { createLogger } from '../infrastructure/logger.js'
+import { errorMessage } from '../shared/errors.js'
 
 const main = async (): Promise<void> => {
-  const config = loadDatabaseConfig();
-  const logger = createLogger(config.LOG_LEVEL);
+  const config = loadDatabaseConfig()
+  const logger = createLogger(config.LOG_LEVEL, config.LOG_FORMAT)
 
-  const domains = await fetchDokployDomains(config.DATABASE_URL);
-  logger.info({ count: domains.length }, "domains Dokploy is serving");
-
+  const domains = await listManagedDomains(
+    new PostgresDomainSource(config.DATABASE_URL),
+    config.GROUP_BY_PROJECT,
+    config.HEALTH_PATHS,
+    toExclusions(config),
+  )
+  logger.info({ count: domains.length }, 'domains Dokploy is serving')
   for (const domain of domains) {
-    logger.info(
-      {
-        url: domainToUrl(domain),
-        monitorName: domainToMonitorName(domain),
-        domainId: domain.domainId,
-        type: domain.domainType,
-      },
-      "domain",
-    );
+    logger.info(domain, 'domain')
   }
-};
+}
 
 main().catch((error: unknown) => {
-  createLogger("error").fatal(
-    { err: error instanceof Error ? error.message : String(error) },
-    "could not read domains",
-  );
-  process.exitCode = 1;
-});
+  createLogger('error').fatal({ err: errorMessage(error) }, 'could not read domains')
+  process.exitCode = 1
+})

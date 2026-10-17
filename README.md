@@ -17,8 +17,10 @@ So this talks Socket.IO directly, speaking just six events — `login`, `monitor
 Python one (`uptime-kuma-api`) last shipped in September 2023 and documents support only up to Kuma
 1.23.2, so it would be a dependency that adds risk rather than removing it.
 
-**Verified against the Kuma 1.23.x event names. Kuma 2.x is a different major and is not supported** —
-note that the Docker tag `latest` still points at the 1.x line; 2.x lives under `2` / `2.4.0` / `next`.
+**Targets Kuma 2.x (tested against 2.5.6).** Kuma 1.x is no longer supported: 2.x changed
+`deleteMonitor`'s arguments and made `editMonitor` overwrite every column it is sent, so this now
+sends Kuma's own copy of a monitor back with only its fields changed — exactly what the Kuma UI does.
+Pin the Kuma image to an exact 2.x tag.
 
 Domains are read straight from Dokploy's Postgres. That couples this to Dokploy's internal schema,
 which is the weakest part of the design. If
@@ -30,9 +32,9 @@ More on the reasoning behind all of this in [DESIGN.md](DESIGN.md).
 ## Setup
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env   # fill in Kuma credentials + DATABASE_URL
-npm test               # reconcile logic, no network needed
+pnpm test              # reconcile logic, no network needed
 ```
 
 A read-only Postgres role is enough and is what you want:
@@ -47,12 +49,12 @@ GRANT SELECT ON domain, application, compose, environment, project TO kuma_sync;
 Then walk up in three steps, each one safe:
 
 ```bash
-npm run domains   # DATABASE_URL only — what would be managed? No Kuma contact at all.
-npm run inspect   # + Kuma credentials — login works? Prints notification ids. Read-only.
-npm run dev       # full reconcile, DRY_RUN=true by default — prints the plan, changes nothing.
+pnpm domains   # DATABASE_URL only — what would be managed? No Kuma contact at all.
+pnpm inspect   # + Kuma credentials — login works? Prints notification ids. Read-only.
+pnpm dev       # full reconcile, DRY_RUN=true by default — prints the plan, changes nothing.
 ```
 
-`npm run inspect` is also how you find `KUMA_NOTIFICATION_IDS`: Kuma's UI never shows notification
+`pnpm inspect` is also how you find `KUMA_NOTIFICATION_IDS`: Kuma's UI never shows notification
 ids, but it pushes them over the socket after login.
 
 Once the plan looks right, set `DRY_RUN=false`.
@@ -61,7 +63,7 @@ Once the plan looks right, set `DRY_RUN=false`.
 
 **This has to run on the Dokploy server.** Dokploy publishes Postgres on the host only when
 `NODE_ENV=development` (`packages/server/src/setup/postgres-setup.ts`), so on a production install the
-database is reachable *only* from inside `dokploy-network`. There is no port to tunnel to from a
+database is reachable _only_ from inside `dokploy-network`. There is no port to tunnel to from a
 laptop.
 
 **Run it as a long-lived container** — `RUN_MODE=loop` with a restart policy, which is what
@@ -74,7 +76,7 @@ docker compose logs -f
 ```
 
 **Do not run it from cron with `docker run --rm`.** Dokploy's Docker Cleanup executes
-`docker image prune --all --force`, and `--all` deletes every image *not referenced by a container* —
+`docker image prune --all --force`, and `--all` deletes every image _not referenced by a container_ —
 not just dangling ones. A one-shot `--rm` container leaves no reference between runs, so the image
 gets deleted and the next cron run dies with `pull access denied`. A long-running container holds a
 reference, so prune cannot touch it.
@@ -94,6 +96,14 @@ reconnecting is cheaper than tracking incremental updates and cannot go subtly s
 Preview-deployment domains are excluded. (They are GitHub-only in Dokploy today, but the filter keeps
 this correct if that changes — otherwise every pull request would add a monitor that dies in days.)
 
+### Groups
+
+Each Dokploy project gets a Kuma group, and its domains are listed under it as `service · host`
+(the environment is added only when it is not the project's default one). Notifications go on the
+domains, never on the group, so an outage alerts once. A group is deleted once nothing is left under
+it; a paused domain keeps its group, and so does a monitor you put in the group yourself.
+`GROUP_BY_PROJECT=false` gives a flat list named `project · service · host` instead.
+
 ### Safety guards
 
 Both refuse the whole run rather than doing partial damage:
@@ -104,14 +114,22 @@ Both refuse the whole run rather than doing partial damage:
   A single removal is always allowed, so normal deletions are never blocked.
 
 `ON_REMOVE=pause` (default) keeps the monitor and its history. `delete` is available but permanent.
+A paused monitor is deleted once it has been paused for `PAUSED_DELETE_AFTER_DAYS` (default 30, `0` =
+never); Kuma does not record when a monitor was paused, so the time is written into its description as
+`dokploy:pausedAt=…` and cleared if the domain comes back.
 
 ### Watching the watcher
 
-If the sync silently stops — broken cron, deleted image, rotated password — new domains stop getting
+The image has a Docker `HEALTHCHECK`: in loop mode the worker touches `ALIVE_FILE`
+(`/tmp/kuma-sync.alive`) after every cycle, and the container turns unhealthy once it has been quiet
+for two intervals plus five minutes — a hung worker, not a failed cycle. Swarm, which Dokploy
+applications run on, replaces an unhealthy task; plain `docker compose` only shows the status.
+
+If the sync silently stops — crashed container, deleted image, rotated password — new domains stop getting
 monitors and nothing tells you. It becomes the blind spot in your own alerting.
 
 `KUMA_PUSH_URL` closes that loop with the tool you already run. Create a **Push** monitor in Kuma, set
-its heartbeat interval comfortably above your cron interval (cron every 15 min → heartbeat 1800s),
+its heartbeat interval comfortably above `INTERVAL_SECONDS` (900s cycles → heartbeat 1800s),
 and put the push URL in `.env`. Every applied cycle pings it with a summary
 (`created=2 updated=0 retired=1`); a failed cycle pings `status=down` with the error, so you hear
 about it immediately instead of waiting for the timeout. If Kuma itself is what is unreachable the
@@ -124,13 +142,26 @@ would let a forgotten `DRY_RUN=true` look green forever while no monitor is ever
 
 See `.env.example`. Worth calling out:
 
-| Variable | Note |
-| --- | --- |
-| `KUMA_NOTIFICATION_IDS` | **Set this.** Without it monitors are created but nothing alerts you. |
-| `KUMA_PUSH_URL` | **Set this too.** Kuma push monitor that tells you when the sync itself dies. |
-| `KUMA_TOTP_SECRET` | Only if 2FA is on the Kuma account. A cron job cannot type a code, so the base32 secret is needed to generate one. |
-| `DRY_RUN` | Defaults to `true`. |
-| `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise. |
+| Variable                   | Note                                                                                                                         |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `KUMA_NOTIFICATION_IDS`    | **Set this.** Without it monitors are created but nothing alerts you.                                                        |
+| `KUMA_PUSH_URL`            | **Set this too.** Kuma push monitor that tells you when the sync itself dies.                                                |
+| `KUMA_TOTP_SECRET`         | Only if 2FA is on the Kuma account. An unattended worker cannot type a code, so the base32 secret is needed to generate one. |
+| `DRY_RUN`                  | Defaults to `true`.                                                                                                          |
+| `HEALTH_PATHS`             | `host=/path` pairs for services whose root answers 401/404 by design, e.g. `api.*=/health`.                                  |
+| `ACCEPTED_STATUS_CODES`    | `host=200-299\|401` pairs for services that are up when they answer something other than 2xx.                                |
+| `EXCLUDE_MIDDLEWARES`      | Domains behind these Traefik middlewares are skipped — e.g. `vpn-only@file`, which Kuma can never reach.                     |
+| `EXCLUDE_HOSTS`            | Host patterns to skip, e.g. `autodiscover.*`. Also `EXCLUDE_PROJECTS` and `EXCLUDE_SERVICES` by name.                        |
+| `MONITOR_INTERVAL_SECONDS` | 120 for a project's default environment; `MONITOR_INTERVAL_SECONDS_OTHER_ENVS` (300) for the rest.                           |
+| `MONITOR_TIMEOUT_SECONDS`  | Must stay below both intervals; Kuma rejects the monitor otherwise.                                                          |
+
+## Upgrading an existing install
+
+The first applied cycle after the upgrade touches every monitor once: names change to
+`service · host` under a group per project (or `project · service · host` with
+`GROUP_BY_PROJECT=false`), intervals move to 120/300 seconds and certificate-expiry alerts switch on.
+Monitors that duplicated an endpoint are retired. Run it with `DRY_RUN=true` first and read the plan;
+if the retire count trips `MAX_RETIRE_RATIO`, raise it for that one run.
 
 ## Troubleshooting
 
@@ -148,20 +179,23 @@ it.
 
 **`Kuma requires a 2FA token`** — set `KUMA_TOTP_SECRET` to the account's base32 secret.
 
-**`Kuma rejected monitor: <msg>`** — the `add` payload was refused. The message names the field.
+**`Kuma add failed: <msg>`** — the `add` payload was refused. The message names the field.
+
+**`Kuma login failed: Too frequently, try again later.`** — Kuma allows 20 password logins a minute.
+One cycle logs in once, so this only shows up when something else hammers the same account.
 
 ## What has been exercised
 
-Running against a live Kuma 1.23.17 alongside a production Dokploy install: login (including the
-notification-id lookup), reading domains, the dry run, creating monitors with notifications attached,
-and the push heartbeat.
+`pnpm test:integration` starts a pinned Kuma 2.5.6 and a Postgres carrying the slice of Dokploy's
+schema that is read, and runs the adapters and full cycles against them: create, update (keeping
+fields set by hand in Kuma), pause, resume, delete, notification attachment, convergence on the
+second cycle, and pause-then-resume of a domain that leaves and returns. The guards are covered by
+unit tests against fakes, which prove nothing reaches Kuma when they fire.
 
-The paths that unit tests cover but a live server has not yet exercised: `editMonitor` (a host
-rename), retirement via `pauseMonitor`, `ON_REMOVE=delete`, and the guards actually firing. If Kuma
-refuses something it surfaces as `Kuma rejected monitor: <msg>`, and that message names the field.
+Before the 2.x move, a live Kuma 1.23.17 next to a production Dokploy exercised login, the dry run,
+monitor creation with notifications and the push heartbeat.
 
 ## Known limitations
+
 - Kuma tags are not used; ownership lives in the description instead, which avoids the separate tag
-  API entirely. Tags could be added later if grouping in the Kuma UI becomes useful.
-- No monitor deletion on `ON_REMOVE=pause` means paused monitors accumulate. Prune them by hand, or
-  switch to `delete` once you trust the guards.
+  API entirely. Monitors are organised with one group per Dokploy project (`GROUP_BY_PROJECT`).
