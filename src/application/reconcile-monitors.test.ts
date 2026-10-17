@@ -79,6 +79,7 @@ const settings: MonitorSettings = {
   retries: 2,
   timeoutSeconds: 16,
   notificationIds: [],
+  notifiesCertificateExpiry: true,
 }
 
 const silent: ILogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
@@ -121,6 +122,7 @@ const input = (overrides: Partial<ReconcileMonitorsInput> = {}): ReconcileMonito
   onRemove: 'pause',
   maxRetireRatio: 0.5,
   isGrouped: false,
+  otherEnvironmentIntervalSeconds: 300,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
   exclusions: { hosts: [], projects: [], services: [], middlewares: [] },
   monitorSettings: settings,

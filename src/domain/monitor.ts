@@ -15,6 +15,7 @@ export interface MonitorSettings {
   retries: number
   timeoutSeconds: number
   notificationIds: string[]
+  notifiesCertificateExpiry: boolean
 }
 
 export const DEFAULT_ACCEPTED_STATUS_CODES = ['200-299']

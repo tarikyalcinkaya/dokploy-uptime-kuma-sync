@@ -134,17 +134,18 @@ would let a forgotten `DRY_RUN=true` look green forever while no monitor is ever
 
 See `.env.example`. Worth calling out:
 
-| Variable                  | Note                                                                                                               |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `KUMA_NOTIFICATION_IDS`   | **Set this.** Without it monitors are created but nothing alerts you.                                              |
-| `KUMA_PUSH_URL`           | **Set this too.** Kuma push monitor that tells you when the sync itself dies.                                      |
-| `KUMA_TOTP_SECRET`        | Only if 2FA is on the Kuma account. A cron job cannot type a code, so the base32 secret is needed to generate one. |
-| `DRY_RUN`                 | Defaults to `true`.                                                                                                |
-| `HEALTH_PATHS`            | `host=/path` pairs for services whose root answers 401/404 by design, e.g. `api.*=/health`.                        |
-| `ACCEPTED_STATUS_CODES`   | `host=200-299\|401` pairs for services that are up when they answer something other than 2xx.                      |
-| `EXCLUDE_MIDDLEWARES`     | Domains behind these Traefik middlewares are skipped — e.g. `vpn-only@file`, which Kuma can never reach.           |
-| `EXCLUDE_HOSTS`           | Host patterns to skip, e.g. `autodiscover.*`. Also `EXCLUDE_PROJECTS` and `EXCLUDE_SERVICES` by name.              |
-| `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise.                                    |
+| Variable                   | Note                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `KUMA_NOTIFICATION_IDS`    | **Set this.** Without it monitors are created but nothing alerts you.                                              |
+| `KUMA_PUSH_URL`            | **Set this too.** Kuma push monitor that tells you when the sync itself dies.                                      |
+| `KUMA_TOTP_SECRET`         | Only if 2FA is on the Kuma account. A cron job cannot type a code, so the base32 secret is needed to generate one. |
+| `DRY_RUN`                  | Defaults to `true`.                                                                                                |
+| `HEALTH_PATHS`             | `host=/path` pairs for services whose root answers 401/404 by design, e.g. `api.*=/health`.                        |
+| `ACCEPTED_STATUS_CODES`    | `host=200-299\|401` pairs for services that are up when they answer something other than 2xx.                      |
+| `EXCLUDE_MIDDLEWARES`      | Domains behind these Traefik middlewares are skipped — e.g. `vpn-only@file`, which Kuma can never reach.           |
+| `EXCLUDE_HOSTS`            | Host patterns to skip, e.g. `autodiscover.*`. Also `EXCLUDE_PROJECTS` and `EXCLUDE_SERVICES` by name.              |
+| `MONITOR_INTERVAL_SECONDS` | 120 for a project's default environment; `MONITOR_INTERVAL_SECONDS_OTHER_ENVS` (300) for the rest.                 |
+| `MONITOR_TIMEOUT_SECONDS`  | Must stay below both intervals; Kuma rejects the monitor otherwise.                                                |
 
 ## Troubleshooting
 

@@ -11,10 +11,12 @@ const settings: MonitorSettings = {
   retries: 2,
   timeoutSeconds: 16,
   notificationIds: [],
+  notifiesCertificateExpiry: true,
 }
 
 const flat: PlanOptions = {
   settings,
+  otherEnvironmentIntervalSeconds: 300,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
   isGrouped: false,
   onRemove: 'pause',
@@ -105,7 +107,13 @@ describe('buildPlan settings propagation', () => {
   const placed = { name: 'proj · api · app.example.com' }
 
   it('updates when the interval, retries or timeout changed', () => {
-    for (const change of [{ intervalSeconds: 300 }, { retries: 5 }, { timeoutSeconds: 30 }]) {
+    const changes = [
+      { intervalSeconds: 300 },
+      { retries: 5 },
+      { timeoutSeconds: 30 },
+      { notifiesCertificateExpiry: false },
+    ]
+    for (const change of changes) {
       const plan = buildPlan(
         [domain()],
         [monitor({ ...placed, settings: { ...settings, ...change } })],
@@ -125,6 +133,21 @@ describe('buildPlan settings propagation', () => {
   it('updates when the accepted status codes changed', () => {
     const plan = buildPlan([domain()], [monitor({ acceptedStatusCodes: ['200-299', '401'] })], flat)
     assert.equal(plan.update.length, 1)
+  })
+})
+
+describe('buildPlan intervals', () => {
+  it('checks the default environment at the main interval and the others less often', () => {
+    const staging = domain({
+      domainId: 'dom2',
+      environmentName: 'staging',
+      isDefaultEnvironment: false,
+    })
+    const plan = buildPlan([domain(), staging], [], flat)
+    assert.deepEqual(
+      plan.create.map(({ spec }) => spec.settings.intervalSeconds),
+      [60, 300],
+    )
   })
 })
 

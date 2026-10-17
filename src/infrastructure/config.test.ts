@@ -41,6 +41,9 @@ describe('loadConfig', () => {
     assert.equal(config.DRY_RUN, true)
     assert.equal(config.ON_REMOVE, 'pause')
     assert.equal(config.LOG_FORMAT, 'json')
+    assert.equal(config.MONITOR_INTERVAL_SECONDS, 120)
+    assert.equal(config.MONITOR_INTERVAL_SECONDS_OTHER_ENVS, 300)
+    assert.equal(config.MONITOR_EXPIRY_NOTIFICATION, true)
     assert.deepEqual(config.KUMA_NOTIFICATION_IDS, [])
   })
 
@@ -58,6 +61,10 @@ describe('loadConfig', () => {
     assert.throws(
       () =>
         loadConfig({ ...minimal, MONITOR_INTERVAL_SECONDS: '20', MONITOR_TIMEOUT_SECONDS: '20' }),
+      /MONITOR_TIMEOUT_SECONDS must be lower/,
+    )
+    assert.throws(
+      () => loadConfig({ ...minimal, MONITOR_INTERVAL_SECONDS_OTHER_ENVS: '16' }),
       /MONITOR_TIMEOUT_SECONDS must be lower/,
     )
   })

@@ -102,7 +102,9 @@ const configSchema = databaseConfigSchema.extend(kumaConfigSchema.shape).extend(
   ON_REMOVE: z.enum(['pause', 'delete']).default('pause'),
   ACCEPTED_STATUS_CODES: hostRules(statusCodes),
   MAX_RETIRE_RATIO: z.coerce.number().min(0).max(1).default(0.5),
-  MONITOR_INTERVAL_SECONDS: positiveInt.default(60),
+  MONITOR_INTERVAL_SECONDS: positiveInt.default(120),
+  MONITOR_INTERVAL_SECONDS_OTHER_ENVS: positiveInt.default(300),
+  MONITOR_EXPIRY_NOTIFICATION: boolish.default(true),
   MONITOR_RETRIES: z.coerce.number().int().min(0).default(2),
   MONITOR_TIMEOUT_SECONDS: positiveInt.default(16),
 })
@@ -136,9 +138,13 @@ export const loadKumaConfig = (env: Env = process.env): KumaConfig => parse(kuma
 
 export const loadConfig = (env: Env = process.env): Config => {
   const config = parse(configSchema, env)
-  if (config.MONITOR_TIMEOUT_SECONDS >= config.MONITOR_INTERVAL_SECONDS) {
+  const shortestInterval = Math.min(
+    config.MONITOR_INTERVAL_SECONDS,
+    config.MONITOR_INTERVAL_SECONDS_OTHER_ENVS,
+  )
+  if (config.MONITOR_TIMEOUT_SECONDS >= shortestInterval) {
     throw new Error(
-      'MONITOR_TIMEOUT_SECONDS must be lower than MONITOR_INTERVAL_SECONDS — Uptime Kuma rejects monitors otherwise',
+      'MONITOR_TIMEOUT_SECONDS must be lower than both MONITOR_INTERVAL_SECONDS values — Uptime Kuma rejects monitors otherwise',
     )
   }
   return config

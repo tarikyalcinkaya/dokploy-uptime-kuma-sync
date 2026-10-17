@@ -21,9 +21,16 @@ const input: ReconcileMonitorsInput = {
   onRemove: 'pause',
   maxRetireRatio: 0.5,
   isGrouped: true,
+  otherEnvironmentIntervalSeconds: 300,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
   exclusions: { hosts: [], projects: [], services: [], middlewares: [] },
-  monitorSettings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
+  monitorSettings: {
+    intervalSeconds: 60,
+    retries: 2,
+    timeoutSeconds: 16,
+    notificationIds: [],
+    notifiesCertificateExpiry: true,
+  },
 }
 
 const cycle = (overrides: Partial<ReconcileMonitorsInput> = {}) =>
