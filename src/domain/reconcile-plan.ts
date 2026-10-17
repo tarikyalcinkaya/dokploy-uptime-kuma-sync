@@ -75,11 +75,22 @@ const planMonitor = (
   }
 }
 
+const sameSet = (left: readonly string[], right: readonly string[]): boolean =>
+  left.length === right.length && left.every((item) => right.includes(item))
+
+const sameSettings = (current: MonitorSettings, wanted: MonitorSettings): boolean =>
+  current.intervalSeconds === wanted.intervalSeconds &&
+  current.retries === wanted.retries &&
+  current.timeoutSeconds === wanted.timeoutSeconds &&
+  sameSet(current.notificationIds, wanted.notificationIds)
+
 const needsUpdate = (monitor: Monitor, { spec, pendingGroupKey }: PlannedMonitor): boolean =>
   monitor.url !== spec.url ||
   monitor.name !== spec.name ||
   pendingGroupKey !== null ||
-  monitor.parentId !== spec.parentId
+  monitor.parentId !== spec.parentId ||
+  !sameSet(monitor.acceptedStatusCodes, spec.acceptedStatusCodes) ||
+  !sameSettings(monitor.settings, spec.settings)
 
 const findManagedMonitors = (monitors: Monitor[]): Map<string, Monitor> => {
   const managed = new Map<string, Monitor>()

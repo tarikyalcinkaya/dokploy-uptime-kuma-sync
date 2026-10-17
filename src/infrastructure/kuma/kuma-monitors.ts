@@ -23,6 +23,11 @@ const kumaMonitorSchema = z.looseObject({
   active: z.union([z.boolean(), z.number()]),
   forceInactive: z.boolean().optional(),
   description: z.string().nullable().optional(),
+  interval: z.number(),
+  maxretries: z.number(),
+  timeout: z.number(),
+  accepted_statuscodes: z.array(z.string()),
+  notificationIDList: z.record(z.string(), z.boolean()).optional(),
 })
 
 const kumaNotificationSchema = z.looseObject({
@@ -123,6 +128,15 @@ export class KumaMonitorReader implements IMonitorReader {
       // treating it as paused would resume it every cycle.
       isActive: Boolean(raw.active) || raw.forceInactive === true,
       description: raw.description ?? null,
+      acceptedStatusCodes: raw.accepted_statuscodes,
+      settings: {
+        intervalSeconds: raw.interval,
+        retries: raw.maxretries,
+        timeoutSeconds: raw.timeout,
+        notificationIds: Object.entries(raw.notificationIDList ?? {})
+          .filter(([, isOn]) => isOn)
+          .map(([id]) => id),
+      },
     }))
   }
 }
