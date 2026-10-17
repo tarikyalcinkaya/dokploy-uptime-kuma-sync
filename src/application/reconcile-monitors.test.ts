@@ -17,6 +17,7 @@ type Call = [method: string, ...args: unknown[]]
 class FakeKuma implements IMonitorReader, IMonitorWriter, IGroupWriter {
   readonly calls: Call[] = []
   readonly parents = new Map<string, number | null>()
+  readonly specs: MonitorSpec[] = []
   #nextId = 100
 
   constructor(
@@ -30,6 +31,7 @@ class FakeKuma implements IMonitorReader, IMonitorWriter, IGroupWriter {
 
   async createMonitor(spec: MonitorSpec): Promise<number> {
     this.#record('createMonitor', spec.url)
+    this.specs.push(spec)
     this.parents.set(spec.url, spec.parentId)
     return this.#nextId++
   }
@@ -105,6 +107,7 @@ const input = (overrides: Partial<ReconcileMonitorsInput> = {}): ReconcileMonito
   onRemove: 'pause',
   maxRetireRatio: 0.5,
   isGrouped: false,
+  rules: { healthPaths: [], acceptedStatusCodes: [] },
   monitorSettings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
   ...overrides,
 })
@@ -224,5 +227,22 @@ describe('reconcileMonitors', () => {
       ['deleteMonitor', 2],
       ['deleteGroup', 50],
     ])
+  })
+
+  it('probes the configured health path and accepts the configured codes', async () => {
+    const kuma = new FakeKuma([])
+    await run(kuma, [domain('api'), domain('web')], {
+      rules: {
+        healthPaths: [{ pattern: 'api.*', value: '/health' }],
+        acceptedStatusCodes: [{ pattern: 'web.example.com', value: ['200-299', '401'] }],
+      },
+    })
+    assert.deepEqual(
+      kuma.specs.map(({ url, acceptedStatusCodes }) => [url, acceptedStatusCodes]),
+      [
+        ['https://api.example.com/health', ['200-299']],
+        ['https://web.example.com', ['200-299', '401']],
+      ],
+    )
   })
 })

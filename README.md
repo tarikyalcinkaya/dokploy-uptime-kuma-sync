@@ -140,6 +140,8 @@ See `.env.example`. Worth calling out:
 | `KUMA_PUSH_URL`           | **Set this too.** Kuma push monitor that tells you when the sync itself dies.                                      |
 | `KUMA_TOTP_SECRET`        | Only if 2FA is on the Kuma account. A cron job cannot type a code, so the base32 secret is needed to generate one. |
 | `DRY_RUN`                 | Defaults to `true`.                                                                                                |
+| `HEALTH_PATHS`            | `host=/path` pairs for services whose root answers 401/404 by design, e.g. `api.*=/health`.                        |
+| `ACCEPTED_STATUS_CODES`   | `host=200-299\|401` pairs for services that are up when they answer something other than 2xx.                      |
 | `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise.                                    |
 
 ## Troubleshooting

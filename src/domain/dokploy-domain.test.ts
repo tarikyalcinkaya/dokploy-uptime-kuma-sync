@@ -26,6 +26,13 @@ describe('toMonitorUrl', () => {
     assert.equal(toMonitorUrl(domain({ path: 'api' })), 'https://app.example.com/api')
   })
 
+  it('swaps the domain path for a health path written from the root', () => {
+    assert.equal(
+      toMonitorUrl(domain({ path: '/app' }), '/health'),
+      'https://app.example.com/health',
+    )
+  })
+
   it('follows the https flag', () => {
     assert.equal(toMonitorUrl(domain({ isHttps: false, path: null })), 'http://app.example.com')
   })

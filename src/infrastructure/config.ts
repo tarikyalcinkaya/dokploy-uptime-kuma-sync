@@ -46,10 +46,35 @@ const commaList = z
       .filter((part) => part.length > 0),
   )
 
+const STATUS_CODE_RANGE = /^\d{3}(-\d{3})?$/
+
+// `pattern=value` pairs, comma separated; the first pattern that matches a host wins.
+const hostRules = <T>(parseValue: z.ZodType<T>) =>
+  commaList.transform((pairs, context) =>
+    pairs.flatMap((pair) => {
+      const separator = pair.indexOf('=')
+      const pattern = pair.slice(0, separator).trim()
+      const value = parseValue.safeParse(pair.slice(separator + 1).trim())
+      if (separator <= 0 || !value.success) {
+        context.addIssue({ code: 'custom', message: `"${pair}" is not a valid host=value pair` })
+        return []
+      }
+      return [{ pattern, value: value.data }]
+    }),
+  )
+
+const healthPath = z.string().regex(/^\//, 'must start with /')
+
+const statusCodes = z
+  .string()
+  .transform((value) => value.split('|').map((code) => code.trim()))
+  .pipe(z.array(z.string().regex(STATUS_CODE_RANGE)).min(1))
+
 // Enough to read Dokploy, so `pnpm domains` works before any Kuma credentials exist.
 const databaseConfigSchema = z.object({
   DATABASE_URL: databaseUrl,
   GROUP_BY_PROJECT: boolish.default(true),
+  HEALTH_PATHS: hostRules(healthPath),
   LOG_LEVEL: logLevel,
   LOG_FORMAT: logFormat,
 })
@@ -70,6 +95,7 @@ const configSchema = databaseConfigSchema.extend(kumaConfigSchema.shape).extend(
   RUN_MODE: z.enum(['once', 'loop']).default('once'),
   INTERVAL_SECONDS: positiveInt.default(900),
   ON_REMOVE: z.enum(['pause', 'delete']).default('pause'),
+  ACCEPTED_STATUS_CODES: hostRules(statusCodes),
   MAX_RETIRE_RATIO: z.coerce.number().min(0).max(1).default(0.5),
   MONITOR_INTERVAL_SECONDS: positiveInt.default(60),
   MONITOR_RETRIES: z.coerce.number().int().min(0).default(2),
