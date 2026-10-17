@@ -28,18 +28,19 @@ unit tested without a network.
 
 **Uptime Kuma has no write REST API.** Its REST surface is read-only — badges, status pages, the push
 endpoint, `/metrics` — and API keys authenticate only `/metrics` and push monitors. Monitors can be
-created solely over Socket.IO, authenticated with the account's username and password. Kuma 1.x has
+created solely over Socket.IO, authenticated with the account's username and password. Kuma has
 no multi-user support either, so the credentials in `.env` are full admin access. That is a property
 of Kuma, not a choice made here.
 
 **No wrapper library.** `uptime-kuma-api` is the obvious candidate and it is not used: its last
-release was September 2023 and it documents support only up to Kuma 1.23.2. Speaking six Socket.IO
+release was September 2023 and it documents support only up to Kuma 1.23.2. Speaking a handful of Socket.IO
 events directly is less surface to break than a dependency that is already outside its own
 compatibility range.
 
-**Kuma 1.23.x only.** The event names target that line. Kuma 2.x is a different major. Note that the
-Docker tag `latest` still points at 1.x; 2.x lives under `2`, `2.4.0` and `next`. Pin the tag — if
-`latest` is ever repointed, an automatic pull becomes a one-way database migration.
+**Kuma 2.x only.** 2.x changed two things that matter here: `editMonitor` assigns every column from
+the payload, so a partial payload nulls out whatever it omits, and `deleteMonitor` gained a
+`deleteChildren` argument. Updates therefore send Kuma's own copy of the monitor back with only the
+managed fields replaced. Pin the Kuma image to an exact tag; a major bump is a one-way migration.
 
 **It has to run on the Dokploy host.** Dokploy publishes Postgres on the host only when
 `NODE_ENV=development`, so on a production install the database is reachable exclusively from inside

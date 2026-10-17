@@ -17,8 +17,10 @@ So this talks Socket.IO directly, speaking just six events — `login`, `monitor
 Python one (`uptime-kuma-api`) last shipped in September 2023 and documents support only up to Kuma
 1.23.2, so it would be a dependency that adds risk rather than removing it.
 
-**Verified against the Kuma 1.23.x event names. Kuma 2.x is a different major and is not supported** —
-note that the Docker tag `latest` still points at the 1.x line; 2.x lives under `2` / `2.4.0` / `next`.
+**Targets Kuma 2.x (tested against 2.5.6).** Kuma 1.x is no longer supported: 2.x changed
+`deleteMonitor`'s arguments and made `editMonitor` overwrite every column it is sent, so this now
+sends Kuma's own copy of a monitor back with only its fields changed — exactly what the Kuma UI does.
+Pin the Kuma image to an exact 2.x tag.
 
 Domains are read straight from Dokploy's Postgres. That couples this to Dokploy's internal schema,
 which is the weakest part of the design. If
@@ -148,17 +150,21 @@ it.
 
 **`Kuma requires a 2FA token`** — set `KUMA_TOTP_SECRET` to the account's base32 secret.
 
-**`Kuma rejected monitor: <msg>`** — the `add` payload was refused. The message names the field.
+**`Kuma add failed: <msg>`** — the `add` payload was refused. The message names the field.
+
+**`Kuma login failed: Too frequently, try again later.`** — Kuma allows 20 password logins a minute.
+One cycle logs in once, so this only shows up when something else hammers the same account.
 
 ## What has been exercised
 
-Running against a live Kuma 1.23.17 alongside a production Dokploy install: login (including the
-notification-id lookup), reading domains, the dry run, creating monitors with notifications attached,
-and the push heartbeat.
+`pnpm test:integration` starts a pinned Kuma 2.5.6 and a Postgres carrying the slice of Dokploy's
+schema that is read, and runs the adapters and full cycles against them: create, update (keeping
+fields set by hand in Kuma), pause, resume, delete, notification attachment, convergence on the
+second cycle, and pause-then-resume of a domain that leaves and returns. The guards are covered by
+unit tests against fakes, which prove nothing reaches Kuma when they fire.
 
-The paths that unit tests cover but a live server has not yet exercised: `editMonitor` (a host
-rename), retirement via `pauseMonitor`, `ON_REMOVE=delete`, and the guards actually firing. If Kuma
-refuses something it surfaces as `Kuma rejected monitor: <msg>`, and that message names the field.
+Before the 2.x move, a live Kuma 1.23.17 next to a production Dokploy exercised login, the dry run,
+monitor creation with notifications and the push heartbeat.
 
 ## Known limitations
 
