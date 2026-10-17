@@ -26,19 +26,22 @@ export const toMonitorUrl = (domain: DokployDomain, healthPath: string | null = 
 const distinctiveEnvironment = (domain: DokployDomain): string | null =>
   domain.isDefaultEnvironment === false ? domain.environmentName : null
 
-const joinName = (parts: (string | null)[], host: string): string => {
+// The path is part of the name only when it is not the root, so two paths on one host stay apart.
+const endpointLabel = (domain: DokployDomain): string => {
+  const path = domain.path && domain.path !== '/' ? domain.path : ''
+  return `${domain.host}${path && !path.startsWith('/') ? '/' : ''}${path}`
+}
+
+const joinName = (parts: (string | null)[], domain: DokployDomain): string => {
   const context = parts.filter((part): part is string => Boolean(part))
-  return [...context, host].join(' · ')
+  return [...context, endpointLabel(domain)].join(' · ')
 }
 
 // Inside a project group the project is already on screen, so the child names only what differs.
 export const toMonitorName = (domain: DokployDomain, isGrouped: boolean): string =>
   isGrouped
-    ? joinName([domain.serviceName, distinctiveEnvironment(domain)], domain.host)
-    : joinName(
-        [domain.projectName, domain.serviceName, distinctiveEnvironment(domain)],
-        domain.host,
-      )
+    ? joinName([domain.serviceName, distinctiveEnvironment(domain)], domain)
+    : joinName([domain.projectName, domain.serviceName, distinctiveEnvironment(domain)], domain)
 
 export const toGroupName = (domain: DokployDomain): string =>
   domain.projectName ?? domain.projectId ?? 'Dokploy'
