@@ -108,4 +108,13 @@ describe('reconcileMonitors end to end', () => {
     const names = (await listMonitors()).map((monitor) => monitor.name).sort()
     assert.deepEqual(names, ['shop', 'web · a.example.com'])
   })
+
+  it('pushes a changed setting to the monitors it already made', async () => {
+    await seedDokploy([service(['a'])])
+    await cycle()
+
+    const slower = { ...input.monitorSettings, intervalSeconds: 120, retries: 4 }
+    assert.equal((await cycle({ monitorSettings: slower })).update.length, 1)
+    assert.equal((await cycle({ monitorSettings: slower })).update.length, 0)
+  })
 })

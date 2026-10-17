@@ -45,6 +45,8 @@ const monitor = (overrides: Partial<Monitor> = {}): Monitor => ({
   parentId: null,
   isActive: true,
   description: `managed\n${MANAGED_MARKER_PREFIX}dom1`,
+  acceptedStatusCodes: ['200-299'],
+  settings,
   ...overrides,
 })
 
@@ -94,7 +96,36 @@ const group = (overrides: Partial<Monitor> = {}): Monitor => ({
   parentId: null,
   isActive: true,
   description: describeGroupOwnership('p1'),
+  acceptedStatusCodes: ['200-299'],
+  settings,
   ...overrides,
+})
+
+describe('buildPlan settings propagation', () => {
+  const placed = { name: 'proj · api · app.example.com' }
+
+  it('updates when the interval, retries or timeout changed', () => {
+    for (const change of [{ intervalSeconds: 300 }, { retries: 5 }, { timeoutSeconds: 30 }]) {
+      const plan = buildPlan(
+        [domain()],
+        [monitor({ ...placed, settings: { ...settings, ...change } })],
+        flat,
+      )
+      assert.equal(plan.update.length, 1, JSON.stringify(change))
+    }
+  })
+
+  it('updates when the notifications changed but not when only their order did', () => {
+    const wanted = { ...flat, settings: { ...settings, notificationIds: ['1', '2'] } }
+    const swapped = monitor({ settings: { ...settings, notificationIds: ['2', '1'] } })
+    assert.equal(buildPlan([domain()], [swapped], wanted).update.length, 0)
+    assert.equal(buildPlan([domain()], [monitor()], wanted).update.length, 1)
+  })
+
+  it('updates when the accepted status codes changed', () => {
+    const plan = buildPlan([domain()], [monitor({ acceptedStatusCodes: ['200-299', '401'] })], flat)
+    assert.equal(plan.update.length, 1)
+  })
 })
 
 describe('buildPlan with project groups', () => {

@@ -48,6 +48,8 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
         parentId: null,
         isActive: true,
         description: describeOwnership('dom1'),
+        acceptedStatusCodes: ['200-299'],
+        settings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
       },
     ])
   })
@@ -105,6 +107,7 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
     )
 
     assert.deepEqual((await raw(id))?.notificationIDList, { [notificationId]: true })
+    assert.deepEqual((await list())[0]?.settings.notificationIds, [String(notificationId)])
     const notifications = await withKuma((session) =>
       new KumaNotificationSource(session).listNotifications(),
     )

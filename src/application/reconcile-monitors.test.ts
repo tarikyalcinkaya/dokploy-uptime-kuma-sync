@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { DokployDomain } from '../domain/dokploy-domain.js'
-import type { GroupSpec, Monitor, MonitorSpec } from '../domain/monitor.js'
+import type { GroupSpec, Monitor, MonitorSettings, MonitorSpec } from '../domain/monitor.js'
 import { describeGroupOwnership, describeOwnership } from '../domain/ownership.js'
 import type {
   IDomainSource,
@@ -74,6 +74,13 @@ class FakeKuma implements IMonitorReader, IMonitorWriter, IGroupWriter {
   }
 }
 
+const settings: MonitorSettings = {
+  intervalSeconds: 60,
+  retries: 2,
+  timeoutSeconds: 16,
+  notificationIds: [],
+}
+
 const silent: ILogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} }
 
 const source = (domains: DokployDomain[]): IDomainSource => ({ listDomains: async () => domains })
@@ -104,6 +111,8 @@ const managed = (id: number, domainId: string, overrides: Partial<Monitor> = {})
   parentId: null,
   isActive: true,
   description: describeOwnership(domainId),
+  acceptedStatusCodes: ['200-299'],
+  settings,
   ...overrides,
 })
 
@@ -114,7 +123,7 @@ const input = (overrides: Partial<ReconcileMonitorsInput> = {}): ReconcileMonito
   isGrouped: false,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
   exclusions: { hosts: [], projects: [], services: [], middlewares: [] },
-  monitorSettings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
+  monitorSettings: settings,
   ...overrides,
 })
 
@@ -194,6 +203,8 @@ describe('reconcileMonitors', () => {
       parentId: null,
       isActive: true,
       description: null,
+      acceptedStatusCodes: ['200-299'],
+      settings,
     }
     const kuma = new FakeKuma([managed(1, 'keep'), foreign])
     await run(kuma, [domain('keep')], { onRemove: 'delete' })
@@ -225,6 +236,8 @@ describe('reconcileMonitors', () => {
       parentId: null,
       isActive: true,
       description: describeGroupOwnership('p2'),
+      acceptedStatusCodes: ['200-299'],
+      settings,
     }
     const child = managed(2, 'gone', { name: 'api · gone.example.com', parentId: 50 })
     const kuma = new FakeKuma([managed(1, 'keep'), group, child])

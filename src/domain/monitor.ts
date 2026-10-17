@@ -6,6 +6,8 @@ export interface Monitor {
   parentId: number | null
   isActive: boolean
   description: string | null
+  acceptedStatusCodes: string[]
+  settings: MonitorSettings
 }
 
 export interface MonitorSettings {
