@@ -41,6 +41,10 @@ class FakeKuma implements IMonitorReader, IMonitorWriter, IGroupWriter {
     this.parents.set(spec.url, spec.parentId)
   }
 
+  async describeMonitor(id: number): Promise<void> {
+    this.#record('describeMonitor', id)
+  }
+
   async pauseMonitor(id: number): Promise<void> {
     this.#record('pauseMonitor', id)
   }
@@ -125,6 +129,7 @@ const input = (overrides: Partial<ReconcileMonitorsInput> = {}): ReconcileMonito
   otherEnvironmentIntervalSeconds: 300,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
   exclusions: { hosts: [], projects: [], services: [], middlewares: [] },
+  pausedRetentionDays: 30,
   monitorSettings: settings,
   ...overrides,
 })
@@ -187,7 +192,10 @@ describe('reconcileMonitors', () => {
   it('pauses a retired monitor by default, keeping its history', async () => {
     const kuma = new FakeKuma([managed(1, 'keep'), managed(2, 'gone')])
     await run(kuma, [domain('keep')])
-    assert.deepEqual(kuma.calls, [['pauseMonitor', 2]])
+    assert.deepEqual(kuma.calls, [
+      ['describeMonitor', 2],
+      ['pauseMonitor', 2],
+    ])
   })
 
   it('deletes a retired monitor only when told to', async () => {
@@ -216,7 +224,10 @@ describe('reconcileMonitors', () => {
   it('stops at the first failed write and leaves the rest for the next cycle', async () => {
     const kuma = new FakeKuma([managed(1, 'keep'), managed(2, 'gone')], 'pauseMonitor')
     await assert.rejects(run(kuma, [domain('keep'), domain('new')]), /pauseMonitor rejected/)
-    assert.deepEqual(kuma.calls, [['createMonitor', 'https://new.example.com']])
+    assert.deepEqual(kuma.calls, [
+      ['createMonitor', 'https://new.example.com'],
+      ['describeMonitor', 2],
+    ])
   })
 
   it('creates the project group first and puts the new monitor under it', async () => {
@@ -272,6 +283,45 @@ describe('reconcileMonitors', () => {
     await run(kuma, [domain('keep'), domain('vpn', 'vpn.example.com', ['vpn-only@file'])], {
       exclusions: { hosts: [], projects: [], services: [], middlewares: ['vpn-only@file'] },
     })
-    assert.deepEqual(kuma.calls, [['pauseMonitor', 2]])
+    assert.deepEqual(kuma.calls, [
+      ['describeMonitor', 2],
+      ['pauseMonitor', 2],
+    ])
+  })
+
+  it('deletes a paused monitor once it has been paused longer than the retention', async () => {
+    const old = describeOwnership('old', new Date('2020-01-01T00:00:00Z'))
+    const recent = describeOwnership('recent', new Date())
+    const kuma = new FakeKuma([
+      managed(1, 'keep'),
+      managed(2, 'old', { isActive: false, description: old }),
+      managed(3, 'recent', { isActive: false, description: recent }),
+      managed(4, 'legacy', { isActive: false }),
+    ])
+    await run(kuma, [domain('keep')])
+    assert.deepEqual(kuma.calls, [
+      ['describeMonitor', 4],
+      ['deleteMonitor', 2],
+    ])
+  })
+
+  it('keeps paused monitors forever when the retention is 0', async () => {
+    const old = describeOwnership('old', new Date('2020-01-01T00:00:00Z'))
+    const kuma = new FakeKuma([
+      managed(1, 'keep'),
+      managed(2, 'old', { isActive: false, description: old }),
+    ])
+    await run(kuma, [domain('keep')], { pausedRetentionDays: 0 })
+    assert.deepEqual(kuma.calls, [])
+  })
+
+  it('clears the pause time when a domain comes back', async () => {
+    const paused = describeOwnership('back', new Date('2026-10-01T00:00:00Z'))
+    const kuma = new FakeKuma([managed(1, 'back', { isActive: false, description: paused })])
+    await run(kuma, [domain('back')])
+    assert.deepEqual(kuma.calls, [
+      ['updateMonitor', 1, 'https://back.example.com'],
+      ['resumeMonitor', 1],
+    ])
   })
 })

@@ -13,7 +13,7 @@ import {
   type MonitorSettings,
   type MonitorSpec,
 } from './monitor.js'
-import { describeOwnership, readOwnedDomainId } from './ownership.js'
+import { describeOwnership, readOwnedDomainId, readPausedAt } from './ownership.js'
 
 export type RemovalAction = 'pause' | 'delete'
 
@@ -30,6 +30,9 @@ export interface PlanOptions {
   rules: MonitorRules
   isGrouped: boolean
   onRemove: RemovalAction
+  // 0 keeps paused monitors forever.
+  pausedRetentionDays: number
+  now: Date
 }
 
 export interface PlannedMonitor {
@@ -43,12 +46,19 @@ export interface PlannedChange extends PlannedMonitor {
   monitor: Monitor
 }
 
+export interface StampedMonitor {
+  monitor: Monitor
+  description: string
+}
+
 export interface ReconcilePlan {
   groups: GroupPlan
   create: PlannedMonitor[]
   update: PlannedChange[]
   revive: PlannedChange[]
   retire: Monitor[]
+  stamp: StampedMonitor[]
+  expire: Monitor[]
   managedCount: number
   domainCount: number
 }
@@ -113,8 +123,11 @@ const sameSettings = (current: MonitorSettings, wanted: MonitorSettings): boolea
   current.notifiesCertificateExpiry === wanted.notifiesCertificateExpiry &&
   sameSet(current.notificationIds, wanted.notificationIds)
 
+const MILLISECONDS_PER_DAY = 86_400_000
+
 const needsUpdate = (monitor: Monitor, { spec, pendingGroupKey }: PlannedMonitor): boolean =>
   monitor.url !== spec.url ||
+  monitor.description !== spec.description ||
   monitor.name !== spec.name ||
   pendingGroupKey !== null ||
   monitor.parentId !== spec.parentId ||
@@ -141,6 +154,7 @@ const survivingChildParents = (
   const leaving = new Set<number>([
     ...plan.update.map(({ monitor }) => monitor.id),
     ...(onRemove === 'delete' ? plan.retire.map((monitor) => monitor.id) : []),
+    ...plan.expire.map((monitor) => monitor.id),
   ])
   const parents = new Set<number>()
   for (const monitor of monitors) {
@@ -176,6 +190,8 @@ export const buildPlan = (
     update: [],
     revive: [],
     retire: [],
+    stamp: [],
+    expire: [],
     managedCount: managed.size,
     domainCount: domains.length,
   }
@@ -199,9 +215,25 @@ export const buildPlan = (
     }
   }
 
+  const stampNow = (domainId: string, monitor: Monitor) =>
+    plan.stamp.push({ monitor, description: describeOwnership(domainId, options.now) })
+  const retentionMs = options.pausedRetentionDays * MILLISECONDS_PER_DAY
   for (const [domainId, monitor] of managed) {
-    if (!seen.has(domainId) && monitor.isActive) {
+    if (seen.has(domainId)) {
+      continue
+    }
+    if (monitor.isActive) {
       plan.retire.push(monitor)
+      if (options.onRemove === 'pause') {
+        stampNow(domainId, monitor)
+      }
+      continue
+    }
+    const pausedAt = readPausedAt(monitor)
+    if (!pausedAt) {
+      stampNow(domainId, monitor)
+    } else if (retentionMs > 0 && options.now.getTime() - pausedAt.getTime() >= retentionMs) {
+      plan.expire.push(monitor)
     }
   }
 

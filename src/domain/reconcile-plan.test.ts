@@ -3,7 +3,7 @@ import { describe, it } from 'node:test'
 import type { DokployDomain } from './dokploy-domain.js'
 import { findGuardViolation } from './guard.js'
 import type { Monitor, MonitorSettings } from './monitor.js'
-import { describeGroupOwnership, MANAGED_MARKER_PREFIX } from './ownership.js'
+import { describeGroupOwnership, describeOwnership, MANAGED_MARKER_PREFIX } from './ownership.js'
 import { buildPlan, type PlanOptions } from './reconcile-plan.js'
 
 const settings: MonitorSettings = {
@@ -20,6 +20,8 @@ const flat: PlanOptions = {
   rules: { healthPaths: [], acceptedStatusCodes: [] },
   isGrouped: false,
   onRemove: 'pause',
+  pausedRetentionDays: 30,
+  now: new Date('2026-10-18T12:00:00Z'),
 }
 
 const grouped: PlanOptions = { ...flat, isGrouped: true }
@@ -46,7 +48,7 @@ const monitor = (overrides: Partial<Monitor> = {}): Monitor => ({
   isGroup: false,
   parentId: null,
   isActive: true,
-  description: `managed\n${MANAGED_MARKER_PREFIX}dom1`,
+  description: describeOwnership('dom1'),
   acceptedStatusCodes: ['200-299'],
   settings,
   ...overrides,

@@ -10,6 +10,7 @@ export const logPlanSummary = (plan: ReconcilePlan, logger: ILogger): void => {
       update: plan.update.length,
       revive: plan.revive.length,
       retire: plan.retire.length,
+      expire: plan.expire.length,
       groupsCreate: plan.groups.create.length,
       groupsUpdate: plan.groups.update.length,
       groupsRetire: plan.groups.retire.length,
@@ -36,6 +37,9 @@ export const logDryRun = (plan: ReconcilePlan, onRemove: RemovalAction, logger: 
   }
   for (const monitor of plan.retire) {
     logger.info({ name: monitor.name }, `would ${onRemove}`)
+  }
+  for (const monitor of plan.expire) {
+    logger.info({ name: monitor.name }, 'would delete expired paused monitor')
   }
   for (const group of plan.groups.retire) {
     logger.info({ group: group.name }, 'would delete empty group')
