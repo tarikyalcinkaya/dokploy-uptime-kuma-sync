@@ -1,5 +1,6 @@
-import { HEARTBEAT_TIMEOUT_MS } from './constants.js'
-import type { Logger } from './logger.js'
+import type { ILogger } from '../application/logger.js'
+import { errorMessage } from '../shared/errors.js'
+import { HEARTBEAT_TIMEOUT_MS } from './timeouts.js'
 
 export interface Heartbeat {
   status: 'up' | 'down'
@@ -7,7 +8,7 @@ export interface Heartbeat {
   durationMs: number
 }
 
-/** Kuma truncates long push messages; keep them readable in the monitor's event list. */
+// Kuma truncates long push messages; keep them readable in the monitor's event list.
 const MAX_MESSAGE_LENGTH = 200
 
 export const buildHeartbeatUrl = (pushUrl: string, heartbeat: Heartbeat): string => {
@@ -18,19 +19,11 @@ export const buildHeartbeatUrl = (pushUrl: string, heartbeat: Heartbeat): string
   return url.toString()
 }
 
-/**
- * Pings a Kuma push monitor so Kuma notices when dokploy-uptime-kuma-sync itself stops working.
- *
- * Without this the sync is the blind spot in the alerting: if it silently dies, new domains stop
- * getting monitors and nothing tells you.
- *
- * Never throws — a failed heartbeat must not fail the cycle. If the ping cannot get through, the
- * push monitor times out on Kuma's side and alerts anyway, which is the same outcome.
- */
+// Never throws: a failed ping must not fail the cycle, and Kuma's push timeout alerts anyway.
 export const sendHeartbeat = async (
   pushUrl: string | undefined,
   heartbeat: Heartbeat,
-  logger: Logger,
+  logger: ILogger,
 ): Promise<void> => {
   if (!pushUrl) {
     return
@@ -51,9 +44,6 @@ export const sendHeartbeat = async (
 
     logger.debug({ status: heartbeat.status }, 'heartbeat sent')
   } catch (error) {
-    logger.warn(
-      { err: error instanceof Error ? error.message : String(error) },
-      'could not send heartbeat',
-    )
+    logger.warn({ err: errorMessage(error) }, 'could not send heartbeat')
   }
 }

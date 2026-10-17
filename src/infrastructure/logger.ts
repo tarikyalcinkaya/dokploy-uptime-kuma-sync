@@ -1,6 +1,8 @@
 import pino from 'pino'
 
-export const createLogger = (level: string) =>
+export type LogFormat = 'json' | 'pretty'
+
+export const createLogger = (level: string, format: LogFormat = 'json') =>
   pino({
     level,
     // Never let a Kuma password or TOTP secret reach the log stream.
@@ -9,9 +11,5 @@ export const createLogger = (level: string) =>
       censor: '[redacted]',
     },
     transport:
-      process.env.NODE_ENV === 'production'
-        ? undefined
-        : { target: 'pino-pretty', options: { colorize: true } },
+      format === 'pretty' ? { target: 'pino-pretty', options: { colorize: true } } : undefined,
   })
-
-export type Logger = ReturnType<typeof createLogger>
