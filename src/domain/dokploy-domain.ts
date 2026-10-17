@@ -9,6 +9,7 @@ export interface DokployDomain {
   isDefaultEnvironment: boolean | null
   projectId: string | null
   projectName: string | null
+  middlewares: string[]
 }
 
 // Dokploy's `port` column is the container port, not the public one, so it never enters the URL.

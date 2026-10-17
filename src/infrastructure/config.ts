@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { Exclusions } from '../domain/exclusion.js'
 
 type Env = Record<string, string | undefined>
 
@@ -75,6 +76,10 @@ const databaseConfigSchema = z.object({
   DATABASE_URL: databaseUrl,
   GROUP_BY_PROJECT: boolish.default(true),
   HEALTH_PATHS: hostRules(healthPath),
+  EXCLUDE_HOSTS: commaList,
+  EXCLUDE_PROJECTS: commaList,
+  EXCLUDE_SERVICES: commaList,
+  EXCLUDE_MIDDLEWARES: commaList,
   LOG_LEVEL: logLevel,
   LOG_FORMAT: logFormat,
 })
@@ -116,6 +121,13 @@ const parse = <T extends z.ZodType>(schema: T, env: Env): z.infer<T> => {
   }
   return parsed.data
 }
+
+export const toExclusions = (config: DatabaseConfig): Exclusions => ({
+  hosts: config.EXCLUDE_HOSTS,
+  projects: config.EXCLUDE_PROJECTS,
+  services: config.EXCLUDE_SERVICES,
+  middlewares: config.EXCLUDE_MIDDLEWARES,
+})
 
 export const loadDatabaseConfig = (env: Env = process.env): DatabaseConfig =>
   parse(databaseConfigSchema, env)

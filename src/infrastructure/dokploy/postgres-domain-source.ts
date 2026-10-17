@@ -5,6 +5,7 @@ import type { IDomainSource } from '../../domain/ports.js'
 import { errorMessage } from '../../shared/errors.js'
 import { DB_TIMEOUT_SECONDS } from '../timeouts.js'
 
+// `to_jsonb` reads columns that older Dokploy releases lack as NULL instead of failing the query.
 // Preview domains come and go with pull requests and would fill Kuma with monitors that die within days.
 const DOMAIN_QUERY = `
 	SELECT
@@ -17,7 +18,8 @@ const DOMAIN_QUERY = `
 		e.name            AS "environmentName",
 		(to_jsonb(e)->>'isDefault')::boolean AS "isDefaultEnvironment",
 		p."projectId"     AS "projectId",
-		p.name            AS "projectName"
+		p.name            AS "projectName",
+		COALESCE(to_jsonb(d)->'middlewares', '[]'::jsonb) AS middlewares
 	FROM domain d
 	LEFT JOIN application a ON a."applicationId" = d."applicationId"
 	LEFT JOIN compose     c ON c."composeId"     = d."composeId"
@@ -41,6 +43,10 @@ const domainRowSchema = z.object({
   isDefaultEnvironment: z.boolean().nullable(),
   projectId: z.string().nullable(),
   projectName: z.string().nullable(),
+  middlewares: z
+    .array(z.string())
+    .nullable()
+    .transform((value) => value ?? []),
 })
 
 const toDomain = ({ https, ...row }: z.infer<typeof domainRowSchema>): DokployDomain => ({

@@ -142,6 +142,8 @@ See `.env.example`. Worth calling out:
 | `DRY_RUN`                 | Defaults to `true`.                                                                                                |
 | `HEALTH_PATHS`            | `host=/path` pairs for services whose root answers 401/404 by design, e.g. `api.*=/health`.                        |
 | `ACCEPTED_STATUS_CODES`   | `host=200-299\|401` pairs for services that are up when they answer something other than 2xx.                      |
+| `EXCLUDE_MIDDLEWARES`     | Domains behind these Traefik middlewares are skipped — e.g. `vpn-only@file`, which Kuma can never reach.           |
+| `EXCLUDE_HOSTS`           | Host patterns to skip, e.g. `autodiscover.*`. Also `EXCLUDE_PROJECTS` and `EXCLUDE_SERVICES` by name.              |
 | `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise.                                    |
 
 ## Troubleshooting

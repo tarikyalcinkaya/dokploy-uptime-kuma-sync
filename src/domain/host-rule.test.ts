@@ -1,20 +1,20 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { findHostRule, matchesHost } from './host-rule.js'
+import { findHostRule, matchesPattern } from './host-rule.js'
 
-describe('matchesHost', () => {
+describe('matchesPattern', () => {
   it('matches a literal host case-insensitively and nothing else', () => {
-    assert.equal(matchesHost('api.example.com', 'API.example.com'), true)
-    assert.equal(matchesHost('api.example.com', 'dev-api.example.com'), false)
+    assert.equal(matchesPattern('api.example.com', 'API.example.com'), true)
+    assert.equal(matchesPattern('api.example.com', 'dev-api.example.com'), false)
   })
 
   it('lets a star span dots', () => {
-    assert.equal(matchesHost('mta-sts.*', 'mta-sts.mail.example.com'), true)
-    assert.equal(matchesHost('*.example.com', 'example.com'), false)
+    assert.equal(matchesPattern('mta-sts.*', 'mta-sts.mail.example.com'), true)
+    assert.equal(matchesPattern('*.example.com', 'example.com'), false)
   })
 
   it('treats regex characters in the pattern literally', () => {
-    assert.equal(matchesHost('a.b', 'axb'), false)
+    assert.equal(matchesPattern('a.b', 'axb'), false)
   })
 })
 

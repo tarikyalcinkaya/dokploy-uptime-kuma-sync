@@ -1,3 +1,4 @@
+import { type Exclusions, isExcluded } from '../domain/exclusion.js'
 import { findGuardViolation } from '../domain/guard.js'
 import type { MonitorSettings, MonitorSpec } from '../domain/monitor.js'
 import type {
@@ -23,6 +24,7 @@ export interface ReconcileMonitorsInput {
   isGrouped: boolean
   monitorSettings: MonitorSettings
   rules: MonitorRules
+  exclusions: Exclusions
 }
 
 export interface ReconcileMonitorsDeps {
@@ -99,10 +101,14 @@ export const reconcileMonitors = async (
   input: ReconcileMonitorsInput,
   deps: ReconcileMonitorsDeps,
 ): Promise<ReconcilePlan> => {
-  const [domains, monitors] = await Promise.all([
+  const [allDomains, monitors] = await Promise.all([
     deps.domains.listDomains(),
     deps.monitorReader.listMonitors(),
   ])
+  const domains = allDomains.filter((domain) => !isExcluded(domain, input.exclusions))
+  if (domains.length < allDomains.length) {
+    deps.logger.debug({ excluded: allDomains.length - domains.length }, 'domains excluded')
+  }
 
   const plan = buildPlan(domains, monitors, {
     settings: input.monitorSettings,
