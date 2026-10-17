@@ -1,16 +1,23 @@
-FROM node:24-alpine AS build
+FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5 AS base
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install
+# Node 25+ no longer bundles corepack.
+RUN npm install --global pnpm@11.28.6
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+FROM base AS build
+RUN pnpm install --frozen-lockfile
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build && npm prune --omit=dev
+RUN pnpm build
 
-FROM node:24-alpine
+FROM base AS deps
+RUN pnpm install --frozen-lockfile --prod
+
+FROM node:26.12.0-alpine@sha256:6f08a523443ddedf52941874c203475b0ad503e859ad70cb26ab8be9a517dbd5
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/node_modules ./node_modules
+COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-COPY --from=build /app/package.json ./package.json
+COPY package.json ./
 USER node
 CMD ["node", "dist/index.js"]

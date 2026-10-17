@@ -49,7 +49,7 @@ const configSchema = z.object({
   /** Dokploy's Postgres. A read-only role is strongly recommended. */
   DATABASE_URL: databaseUrl,
 
-  KUMA_URL: z.string().url(),
+  KUMA_URL: z.url(),
   KUMA_USERNAME: z.string().min(1),
   KUMA_PASSWORD: z.string().min(1),
   /** Base32 TOTP secret, only if 2FA is enabled on the Kuma account. */
@@ -59,7 +59,7 @@ const configSchema = z.object({
    * Push URL of a Kuma push monitor, so Kuma alerts when dokploy-uptime-kuma-sync itself stops running.
    * Without it the sync is the blind spot in your alerting.
    */
-  KUMA_PUSH_URL: z.string().url().optional(),
+  KUMA_PUSH_URL: z.url().optional(),
 
   /** Comma separated Kuma notification ids to attach to every managed monitor. */
   KUMA_NOTIFICATION_IDS: z
@@ -73,7 +73,7 @@ const configSchema = z.object({
     ),
 
   /** Log the planned changes without touching Kuma. Defaults to on. */
-  DRY_RUN: boolish.default("true"),
+  DRY_RUN: boolish.default(true),
 
   RUN_MODE: z.enum(["once", "loop"]).default("once"),
   INTERVAL_SECONDS: positiveInt.default(900),

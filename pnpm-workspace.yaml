@@ -1,0 +1,4 @@
+allowBuilds:
+  esbuild: true
+# Minutes; new releases wait a day before they can be installed.
+minimumReleaseAge: 1440

@@ -30,9 +30,9 @@ More on the reasoning behind all of this in [DESIGN.md](DESIGN.md).
 ## Setup
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env   # fill in Kuma credentials + DATABASE_URL
-npm test               # reconcile logic, no network needed
+pnpm test              # reconcile logic, no network needed
 ```
 
 A read-only Postgres role is enough and is what you want:
@@ -47,12 +47,12 @@ GRANT SELECT ON domain, application, compose, environment, project TO kuma_sync;
 Then walk up in three steps, each one safe:
 
 ```bash
-npm run domains   # DATABASE_URL only — what would be managed? No Kuma contact at all.
-npm run inspect   # + Kuma credentials — login works? Prints notification ids. Read-only.
-npm run dev       # full reconcile, DRY_RUN=true by default — prints the plan, changes nothing.
+pnpm domains   # DATABASE_URL only — what would be managed? No Kuma contact at all.
+pnpm inspect   # + Kuma credentials — login works? Prints notification ids. Read-only.
+pnpm dev       # full reconcile, DRY_RUN=true by default — prints the plan, changes nothing.
 ```
 
-`npm run inspect` is also how you find `KUMA_NOTIFICATION_IDS`: Kuma's UI never shows notification
+`pnpm inspect` is also how you find `KUMA_NOTIFICATION_IDS`: Kuma's UI never shows notification
 ids, but it pushes them over the socket after login.
 
 Once the plan looks right, set `DRY_RUN=false`.
