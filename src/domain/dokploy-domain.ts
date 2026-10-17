@@ -6,6 +6,8 @@ export interface DokployDomain {
   domainType: string | null
   serviceName: string | null
   environmentName: string | null
+  isDefaultEnvironment: boolean | null
+  projectId: string | null
   projectName: string | null
 }
 
@@ -17,9 +19,23 @@ export const toMonitorUrl = (domain: DokployDomain): string => {
   return `${scheme}://${domain.host}${normalisedPath}`
 }
 
-export const toMonitorName = (domain: DokployDomain): string => {
-  const context = [domain.projectName, domain.serviceName]
-    .filter((part): part is string => Boolean(part))
-    .join('/')
-  return context.length > 0 ? `${context} · ${domain.host}` : domain.host
+// Dokploy creates a default environment with every project, so naming it would be pure noise.
+const distinctiveEnvironment = (domain: DokployDomain): string | null =>
+  domain.isDefaultEnvironment === false ? domain.environmentName : null
+
+const joinName = (parts: (string | null)[], host: string): string => {
+  const context = parts.filter((part): part is string => Boolean(part))
+  return [...context, host].join(' · ')
 }
+
+// Inside a project group the project is already on screen, so the child names only what differs.
+export const toMonitorName = (domain: DokployDomain, isGrouped: boolean): string =>
+  isGrouped
+    ? joinName([domain.serviceName, distinctiveEnvironment(domain)], domain.host)
+    : joinName(
+        [domain.projectName, domain.serviceName, distinctiveEnvironment(domain)],
+        domain.host,
+      )
+
+export const toGroupName = (domain: DokployDomain): string =>
+  domain.projectName ?? domain.projectId ?? 'Dokploy'

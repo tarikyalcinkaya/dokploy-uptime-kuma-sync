@@ -96,6 +96,14 @@ reconnecting is cheaper than tracking incremental updates and cannot go subtly s
 Preview-deployment domains are excluded. (They are GitHub-only in Dokploy today, but the filter keeps
 this correct if that changes — otherwise every pull request would add a monitor that dies in days.)
 
+### Groups
+
+Each Dokploy project gets a Kuma group, and its domains are listed under it as `service · host`
+(the environment is added only when it is not the project's default one). Notifications go on the
+domains, never on the group, so an outage alerts once. A group is deleted once nothing is left under
+it; a paused domain keeps its group, and so does a monitor you put in the group yourself.
+`GROUP_BY_PROJECT=false` gives a flat list named `project · service · host` instead.
+
 ### Safety guards
 
 Both refuse the whole run rather than doing partial damage:
@@ -169,6 +177,6 @@ monitor creation with notifications and the push heartbeat.
 ## Known limitations
 
 - Kuma tags are not used; ownership lives in the description instead, which avoids the separate tag
-  API entirely. Tags could be added later if grouping in the Kuma UI becomes useful.
+  API entirely. Monitors are organised with one group per Dokploy project (`GROUP_BY_PROJECT`).
 - No monitor deletion on `ON_REMOVE=pause` means paused monitors accumulate. Prune them by hand, or
   switch to `delete` once you trust the guards.

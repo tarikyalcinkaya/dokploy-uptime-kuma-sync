@@ -49,6 +49,7 @@ const commaList = z
 // Enough to read Dokploy, so `pnpm domains` works before any Kuma credentials exist.
 const databaseConfigSchema = z.object({
   DATABASE_URL: databaseUrl,
+  GROUP_BY_PROJECT: boolish.default(true),
   LOG_LEVEL: logLevel,
   LOG_FORMAT: logFormat,
 })

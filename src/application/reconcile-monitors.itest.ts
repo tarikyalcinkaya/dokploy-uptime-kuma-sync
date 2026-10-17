@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import { PostgresDomainSource } from '../infrastructure/dokploy/postgres-domain-source.js'
-import { KumaMonitorReader, KumaMonitorWriter } from '../infrastructure/kuma/kuma-monitors.js'
+import {
+  KumaGroupWriter,
+  KumaMonitorReader,
+  KumaMonitorWriter,
+} from '../infrastructure/kuma/kuma-monitors.js'
 import {
   databaseUrl,
   resetKuma,
@@ -16,27 +20,34 @@ const input: ReconcileMonitorsInput = {
   isDryRun: false,
   onRemove: 'pause',
   maxRetireRatio: 0.5,
+  isGrouped: true,
   monitorSettings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
 }
 
-const cycle = () =>
+const cycle = (overrides: Partial<ReconcileMonitorsInput> = {}) =>
   withKuma((session) =>
-    reconcileMonitors(input, {
-      domains: new PostgresDomainSource(databaseUrl()),
-      monitorReader: new KumaMonitorReader(session),
-      monitorWriter: new KumaMonitorWriter(session),
-      logger: silentLogger,
-    }),
+    reconcileMonitors(
+      { ...input, ...overrides },
+      {
+        domains: new PostgresDomainSource(databaseUrl()),
+        monitorReader: new KumaMonitorReader(session),
+        monitorWriter: new KumaMonitorWriter(session),
+        groupWriter: new KumaGroupWriter(session),
+        logger: silentLogger,
+      },
+    ),
   )
 
-const service = (domainIds: string[]): SeedService => ({
-  projectId: 'p1',
-  projectName: 'shop',
+const service = (domainIds: string[], projectId = 'p1'): SeedService => ({
+  projectId,
+  projectName: projectId === 'p1' ? 'shop' : 'blog',
   kind: 'application',
-  serviceId: 'a1',
+  serviceId: `${projectId}-a1`,
   serviceName: 'web',
   domains: domainIds.map((domainId) => ({ domainId, host: `${domainId}.example.com` })),
 })
+
+const listMonitors = () => withKuma((session) => new KumaMonitorReader(session).listMonitors())
 
 const counts = (plan: Awaited<ReturnType<typeof cycle>>) => ({
   create: plan.create.length,
@@ -60,10 +71,39 @@ describe('reconcileMonitors end to end', () => {
 
     await seedDokploy([service(['a', 'b'])])
     assert.deepEqual(counts(await cycle()), { create: 0, update: 0, revive: 0, retire: 1 })
-    const paused = await withKuma((session) => new KumaMonitorReader(session).listMonitors())
+    const paused = await listMonitors()
     assert.equal(paused.filter((monitor) => !monitor.isActive).length, 1)
 
     await seedDokploy([service(['a', 'b', 'c'])])
     assert.deepEqual(counts(await cycle()), { create: 0, update: 0, revive: 1, retire: 0 })
+  })
+
+  it('builds one group per project and puts each domain under its own', async () => {
+    await seedDokploy([service(['a', 'b'], 'p1'), service(['c'], 'p2')])
+    await cycle()
+    assert.deepEqual(counts(await cycle()), { create: 0, update: 0, revive: 0, retire: 0 })
+
+    const monitors = await listMonitors()
+    const groups = new Map(monitors.filter((m) => m.isGroup).map((m) => [m.id, m.name]))
+    const placement = monitors
+      .filter((m) => !m.isGroup)
+      .map((m) => `${groups.get(m.parentId ?? -1)} > ${m.name}`)
+      .sort()
+    assert.deepEqual(placement, [
+      'blog > web · c.example.com',
+      'shop > web · a.example.com',
+      'shop > web · b.example.com',
+    ])
+  })
+
+  it('deletes a project group once its last domain is deleted', async () => {
+    await seedDokploy([service(['a'], 'p1'), service(['c'], 'p2')])
+    await cycle()
+
+    await seedDokploy([service(['a'], 'p1')])
+    await cycle({ onRemove: 'delete' })
+
+    const names = (await listMonitors()).map((monitor) => monitor.name).sort()
+    assert.deepEqual(names, ['shop', 'web · a.example.com'])
   })
 })

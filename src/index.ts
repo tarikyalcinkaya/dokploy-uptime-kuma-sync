@@ -3,7 +3,11 @@ import { reconcileMonitors, type ReconcileMonitorsInput } from './application/re
 import { type Config, loadConfig } from './infrastructure/config.js'
 import { PostgresDomainSource } from './infrastructure/dokploy/postgres-domain-source.js'
 import { sendHeartbeat } from './infrastructure/heartbeat.js'
-import { KumaMonitorReader, KumaMonitorWriter } from './infrastructure/kuma/kuma-monitors.js'
+import {
+  KumaGroupWriter,
+  KumaMonitorReader,
+  KumaMonitorWriter,
+} from './infrastructure/kuma/kuma-monitors.js'
 import { KumaSession } from './infrastructure/kuma/kuma-session.js'
 import { createLogger } from './infrastructure/logger.js'
 import { errorMessage } from './shared/errors.js'
@@ -27,6 +31,7 @@ const toReconcileInput = (config: Config): ReconcileMonitorsInput => ({
   isDryRun: config.DRY_RUN,
   onRemove: config.ON_REMOVE,
   maxRetireRatio: config.MAX_RETIRE_RATIO,
+  isGrouped: config.GROUP_BY_PROJECT,
   monitorSettings: {
     intervalSeconds: config.MONITOR_INTERVAL_SECONDS,
     retries: config.MONITOR_RETRIES,
@@ -61,6 +66,7 @@ const cycle = async (config: Config, logger: ILogger): Promise<void> => {
       domains: new PostgresDomainSource(config.DATABASE_URL),
       monitorReader: new KumaMonitorReader(session),
       monitorWriter: new KumaMonitorWriter(session),
+      groupWriter: new KumaGroupWriter(session),
       logger,
     })
 

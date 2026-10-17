@@ -26,34 +26,32 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
 
     const domains = await new PostgresDomainSource(databaseUrl()).listDomains()
 
-    assert.deepEqual(
-      domains.map(({ domainId, host, isHttps, path, projectName, serviceName }) => ({
-        domainId,
-        host,
-        isHttps,
-        path,
-        projectName,
-        serviceName,
-      })),
-      [
-        {
-          domainId: 'd1',
-          host: 'shop.example.com',
-          isHttps: true,
-          path: '/',
-          projectName: 'shop',
-          serviceName: 'web',
-        },
-        {
-          domainId: 'd2',
-          host: 'api.example.com',
-          isHttps: false,
-          path: '/v1',
-          projectName: 'shop',
-          serviceName: 'api',
-        },
-      ],
-    )
+    assert.deepEqual(domains, [
+      {
+        domainId: 'd1',
+        host: 'shop.example.com',
+        isHttps: true,
+        path: '/',
+        domainType: 'application',
+        environmentName: 'production',
+        projectId: 'p1',
+        projectName: 'shop',
+        serviceName: 'web',
+        isDefaultEnvironment: true,
+      },
+      {
+        domainId: 'd2',
+        host: 'api.example.com',
+        isHttps: false,
+        path: '/v1',
+        domainType: 'compose',
+        environmentName: 'production',
+        projectId: 'p1',
+        projectName: 'shop',
+        serviceName: 'api',
+        isDefaultEnvironment: true,
+      },
+    ])
   })
 
   it('leaves out preview deployments and blank hosts', async () => {

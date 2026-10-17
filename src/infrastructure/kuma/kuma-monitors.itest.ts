@@ -1,14 +1,20 @@
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
 import type { MonitorSpec } from '../../domain/monitor.js'
-import { describeOwnership } from '../../domain/ownership.js'
+import { describeGroupOwnership, describeOwnership } from '../../domain/ownership.js'
 import { addWebhookNotification, resetKuma, withKuma } from '../../testing/fixtures.js'
-import { KumaMonitorReader, KumaMonitorWriter, KumaNotificationSource } from './kuma-monitors.js'
+import {
+  KumaGroupWriter,
+  KumaMonitorReader,
+  KumaMonitorWriter,
+  KumaNotificationSource,
+} from './kuma-monitors.js'
 
 const spec = (overrides: Partial<MonitorSpec> = {}): MonitorSpec => ({
   name: 'proj/api · app.example.com',
   url: 'https://app.example.com',
   description: describeOwnership('dom1'),
+  parentId: null,
   settings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
   ...overrides,
 })
@@ -37,6 +43,8 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
         id,
         name: 'proj/api · app.example.com',
         url: 'https://app.example.com',
+        isGroup: false,
+        parentId: null,
         isActive: true,
         description: describeOwnership('dom1'),
       },
@@ -95,5 +103,46 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
       new KumaNotificationSource(session).listNotifications(),
     )
     assert.ok(notifications.some((n) => n.id === notificationId && n.name === 'integration'))
+  })
+
+  it('creates a project group, nests a child in it and renames it without touching the child', async () => {
+    const groupSpec = {
+      name: 'shop',
+      description: describeGroupOwnership('p1'),
+      intervalSeconds: 60,
+    }
+    const groupId = await withKuma((session) => new KumaGroupWriter(session).createGroup(groupSpec))
+    const childId = await create(spec({ parentId: groupId }))
+
+    await withKuma((session) =>
+      new KumaGroupWriter(session).updateGroup(groupId, { ...groupSpec, name: 'store' }),
+    )
+
+    const monitors = await list()
+    const group = monitors.find(({ id }) => id === groupId)
+    assert.equal(group?.isGroup, true)
+    assert.equal(group?.name, 'store')
+    assert.equal(monitors.find(({ id }) => id === childId)?.parentId, groupId)
+    assert.deepEqual((await raw(groupId))?.notificationIDList, {})
+  })
+
+  it('moves a child out of its group and deletes the emptied group', async () => {
+    const groupId = await withKuma((session) =>
+      new KumaGroupWriter(session).createGroup({
+        name: 'shop',
+        description: describeGroupOwnership('p1'),
+        intervalSeconds: 60,
+      }),
+    )
+    const childId = await create(spec({ parentId: groupId }))
+
+    await withKuma((session) => new KumaMonitorWriter(session).updateMonitor(childId, spec()))
+    await withKuma((session) => new KumaGroupWriter(session).deleteGroup(groupId))
+
+    const monitors = await list()
+    assert.deepEqual(
+      monitors.map(({ id, parentId }) => [id, parentId]),
+      [[childId, null]],
+    )
   })
 })

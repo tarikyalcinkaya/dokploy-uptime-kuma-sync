@@ -21,6 +21,7 @@ Dependencies point inwards only. `pnpm arch` (dependency-cruiser) fails the buil
 | `IDomainSource`       | `PostgresDomainSource`   | domains Dokploy currently serves          |
 | `IMonitorReader`      | `KumaMonitorReader`      | monitors Kuma pushes after login          |
 | `IMonitorWriter`      | `KumaMonitorWriter`      | create, update, pause, resume, delete     |
+| `IGroupWriter`        | `KumaGroupWriter`        | project groups: create, rename, delete    |
 | `INotificationSource` | `KumaNotificationSource` | notification ids, for `pnpm inspect` only |
 
 The Kuma adapters share one `KumaSession` per cycle: Kuma pushes its lists once per connection,
@@ -34,7 +35,10 @@ so a fresh session is what keeps the view current.
 
 ## Invariants
 
-- **Ownership:** only monitors whose description carries `dokploy:domainId=<id>` are touched.
+- **Ownership:** only monitors whose description carries `dokploy:domainId=<id>`, and groups whose
+  description carries `dokploy:projectId=<id>`, are touched.
+- **Groups first, empty groups last:** a run creates missing groups before the monitors that go in
+  them, and deletes a group only after its last child is gone.
 - **Guards abort, never trim:** zero domains with managed monitors present, or a retire count above
   `MAX_RETIRE_RATIO`, aborts the whole run before anything is sent.
 - **Applying can stop halfway.** Changes are sent one by one; if one fails the cycle ends and the
