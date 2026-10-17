@@ -1,8 +1,12 @@
-import { loadConfig } from './config.js'
-import { sendHeartbeat } from './heartbeat.js'
-import { KumaClient } from './kuma.js'
-import { createLogger, type Logger } from './logger.js'
-import { runOnce } from './reconcile.js'
+import type { ILogger } from './application/logger.js'
+import { reconcileMonitors, type ReconcileMonitorsInput } from './application/reconcile-monitors.js'
+import { type Config, loadConfig } from './infrastructure/config.js'
+import { PostgresDomainSource } from './infrastructure/dokploy/postgres-domain-source.js'
+import { sendHeartbeat } from './infrastructure/heartbeat.js'
+import { KumaMonitorReader, KumaMonitorWriter } from './infrastructure/kuma/kuma-monitors.js'
+import { KumaSession } from './infrastructure/kuma/kuma-session.js'
+import { createLogger } from './infrastructure/logger.js'
+import { errorMessage } from './shared/errors.js'
 
 const MILLISECONDS_PER_SECOND = 1000
 
@@ -19,13 +23,22 @@ const sleep = (seconds: number, signal: AbortSignal): Promise<void> =>
     )
   })
 
-/**
- * One full cycle owns its own Kuma connection. Kuma pushes the monitor list once per session, so
- * reconnecting each cycle is what keeps the view fresh — cheaper than tracking incremental
- * `updateMonitorIntoList` events and impossible to get subtly stale.
- */
-const cycle = async (config: ReturnType<typeof loadConfig>, logger: Logger): Promise<void> => {
-  const kuma = new KumaClient(
+const toReconcileInput = (config: Config): ReconcileMonitorsInput => ({
+  isDryRun: config.DRY_RUN,
+  onRemove: config.ON_REMOVE,
+  maxRetireRatio: config.MAX_RETIRE_RATIO,
+  monitorSettings: {
+    intervalSeconds: config.MONITOR_INTERVAL_SECONDS,
+    retries: config.MONITOR_RETRIES,
+    timeoutSeconds: config.MONITOR_TIMEOUT_SECONDS,
+    notificationIds: config.KUMA_NOTIFICATION_IDS,
+  },
+})
+
+// Kuma pushes the monitor list once per session, so a fresh connection per cycle is what keeps
+// the view current — cheaper than tracking incremental updates and impossible to get stale.
+const cycle = async (config: Config, logger: ILogger): Promise<void> => {
+  const session = new KumaSession(
     {
       url: config.KUMA_URL,
       username: config.KUMA_USERNAME,
@@ -35,8 +48,7 @@ const cycle = async (config: ReturnType<typeof loadConfig>, logger: Logger): Pro
     logger,
   )
 
-  // A dry run proves nothing was applied, so it must not report the sync as healthy — otherwise
-  // leaving DRY_RUN on forever would look green while no monitor is ever created.
+  // A dry run applies nothing, so reporting it healthy would keep a forgotten DRY_RUN green forever.
   const pushUrl = config.DRY_RUN ? undefined : config.KUMA_PUSH_URL
   if (config.DRY_RUN && config.KUMA_PUSH_URL) {
     logger.debug('dry run — heartbeat skipped')
@@ -44,9 +56,13 @@ const cycle = async (config: ReturnType<typeof loadConfig>, logger: Logger): Pro
   const startedAt = performance.now()
 
   try {
-    await kuma.connect()
-    await kuma.login()
-    const plan = await runOnce(config, kuma, logger)
+    await session.open()
+    const plan = await reconcileMonitors(toReconcileInput(config), {
+      domains: new PostgresDomainSource(config.DATABASE_URL),
+      monitorReader: new KumaMonitorReader(session),
+      monitorWriter: new KumaMonitorWriter(session),
+      logger,
+    })
 
     await sendHeartbeat(
       pushUrl,
@@ -58,26 +74,22 @@ const cycle = async (config: ReturnType<typeof loadConfig>, logger: Logger): Pro
       logger,
     )
   } catch (error) {
-    // Report the failure actively rather than waiting for Kuma's push timeout. If Kuma itself is
-    // what is unreachable, this ping fails too and the timeout covers us.
+    // Report actively instead of waiting for Kuma's push timeout; if Kuma itself is down the
+    // ping fails too and the timeout covers us.
     await sendHeartbeat(
       pushUrl,
-      {
-        status: 'down',
-        message: error instanceof Error ? error.message : String(error),
-        durationMs: performance.now() - startedAt,
-      },
+      { status: 'down', message: errorMessage(error), durationMs: performance.now() - startedAt },
       logger,
     )
     throw error
   } finally {
-    kuma.close()
+    session.close()
   }
 }
 
 const main = async (): Promise<void> => {
   const config = loadConfig()
-  const logger = createLogger(config.LOG_LEVEL)
+  const logger = createLogger(config.LOG_LEVEL, config.LOG_FORMAT)
 
   logger.info(
     {
@@ -106,9 +118,8 @@ const main = async (): Promise<void> => {
     try {
       await cycle(config, logger)
     } catch (error) {
-      // A failed cycle must not kill the loop: Kuma or Postgres being briefly unreachable is
-      // expected, and the next cycle reconciles from scratch anyway.
-      logger.error({ err: error instanceof Error ? error.message : String(error) }, 'cycle failed')
+      // Kuma or Postgres being briefly unreachable is expected; the next cycle starts from scratch.
+      logger.error({ err: errorMessage(error) }, 'cycle failed')
     }
 
     if (controller.signal.aborted) {
@@ -119,9 +130,8 @@ const main = async (): Promise<void> => {
 }
 
 main().catch((error: unknown) => {
-  const logger = createLogger('error')
-  logger.fatal(
-    { err: error instanceof Error ? error.message : String(error) },
+  createLogger('error').fatal(
+    { err: errorMessage(error) },
     'dokploy-uptime-kuma-sync failed to start',
   )
   process.exitCode = 1
