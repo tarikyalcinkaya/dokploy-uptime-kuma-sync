@@ -15,6 +15,13 @@ describe('matchesPattern', () => {
 
   it('treats regex characters in the pattern literally', () => {
     assert.equal(matchesPattern('a.b', 'axb'), false)
+    assert.equal(matchesPattern('(a)+', '(a)+'), true)
+  })
+
+  it('stays fast on a pattern with many stars against a long host', () => {
+    const startedAt = performance.now()
+    assert.equal(matchesPattern('*a*a*a*a*a*a*b', 'a'.repeat(253)), false)
+    assert.ok(performance.now() - startedAt < 50)
   })
 })
 

@@ -29,8 +29,7 @@ export interface KumaAck {
 export const describeAckFailure = (event: string, ack: KumaAck | undefined): string =>
   `Kuma ${event} failed: ${ack?.msg ?? 'no reason given'}`
 
-// Kuma has no write REST API and its Socket.IO API is undocumented and unversioned, so we speak
-// only the handful of events we need instead of depending on a wrapper library.
+// Kuma's Socket.IO API is undocumented, so only the few events we need are spoken, without a wrapper.
 export class KumaSession {
   readonly #credentials: KumaCredentials
   readonly #logger: ILogger
