@@ -117,6 +117,11 @@ Both refuse the whole run rather than doing partial damage:
 
 ### Watching the watcher
 
+The image has a Docker `HEALTHCHECK`: in loop mode the worker touches `ALIVE_FILE`
+(`/tmp/kuma-sync.alive`) after every cycle, and the container turns unhealthy once it has been quiet
+for two intervals plus five minutes — a hung worker, not a failed cycle. Swarm, which Dokploy
+applications run on, replaces an unhealthy task; plain `docker compose` only shows the status.
+
 If the sync silently stops — crashed container, deleted image, rotated password — new domains stop getting
 monitors and nothing tells you. It becomes the blind spot in your own alerting.
 

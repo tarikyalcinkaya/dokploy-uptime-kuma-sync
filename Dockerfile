@@ -20,4 +20,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
 USER node
+# Loop mode only; `once` always reports healthy. Swarm (Dokploy applications) replaces an unhealthy task.
+HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 CMD ["node", "dist/bin/healthcheck.js"]
 CMD ["node", "dist/index.js"]
