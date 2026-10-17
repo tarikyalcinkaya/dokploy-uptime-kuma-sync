@@ -53,6 +53,11 @@ describe('toMonitorName', () => {
     assert.equal(toMonitorName(staging, true), 'api · staging · app.example.com')
   })
 
+  it('names a sub path so two paths on one host stay apart', () => {
+    assert.equal(toMonitorName(domain({ path: '/admin' }), true), 'api · app.example.com/admin')
+    assert.equal(toMonitorName(domain({ path: 'admin' }), true), 'api · app.example.com/admin')
+  })
+
   it('falls back to the bare host without context', () => {
     const bare = domain({ projectName: null, serviceName: null })
     assert.equal(toMonitorName(bare, false), 'app.example.com')
