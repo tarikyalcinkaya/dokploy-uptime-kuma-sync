@@ -5,14 +5,14 @@ module.exports = {
       name: 'domain-is-pure',
       comment: 'Domain depends on nothing but itself and the shared kernel — no I/O, no packages.',
       severity: 'error',
-      from: { path: '^src/domain/', pathNot: '\\.test\\.ts$' },
+      from: { path: '^src/domain/', pathNot: '\\.(test|itest)\\.ts$' },
       to: { pathNot: '^src/(domain|shared)/' },
     },
     {
       name: 'application-sees-only-domain',
       comment: 'Use cases talk to the outside world only through domain ports.',
       severity: 'error',
-      from: { path: '^src/application/', pathNot: '\\.test\\.ts$' },
+      from: { path: '^src/application/', pathNot: '\\.(test|itest)\\.ts$' },
       to: { pathNot: '^src/(domain|application|shared)/' },
     },
     {

@@ -3,18 +3,27 @@ import { io, type Socket } from 'socket.io-client'
 import type { ILogger } from '../../application/logger.js'
 import { CALL_TIMEOUT_MS, CONNECT_TIMEOUT_MS, PUSH_TIMEOUT_MS } from '../timeouts.js'
 
-export interface KumaCredentials {
+interface PasswordCredentials {
   url: string
   username: string
   password: string
   totpSecret?: string | undefined
 }
 
+// A session JWT from an earlier login; `loginByToken` is not subject to Kuma's 20/min login limit.
+interface TokenCredentials {
+  url: string
+  jwt: string
+}
+
+export type KumaCredentials = PasswordCredentials | TokenCredentials
+
 export interface KumaAck {
   ok: boolean
   msg?: string
   monitorID?: number
   tokenRequired?: boolean
+  token?: string
 }
 
 export const describeAckFailure = (event: string, ack: KumaAck | undefined): string =>
@@ -26,6 +35,7 @@ export class KumaSession {
   readonly #credentials: KumaCredentials
   readonly #logger: ILogger
   #socket: Socket | null = null
+  #jwt: string | null = null
   #pushes = new Map<string, Promise<unknown>>()
 
   constructor(credentials: KumaCredentials, logger: ILogger) {
@@ -95,21 +105,25 @@ export class KumaSession {
     return ack
   }
 
+  get jwt(): string | null {
+    return this.#jwt
+  }
+
   close(): void {
     this.#socket?.close()
     this.#socket = null
   }
 
   async #login(): Promise<void> {
-    const token = this.#credentials.totpSecret
-      ? authenticator.generate(this.#credentials.totpSecret)
-      : ''
-
-    const ack = await this.call('login', {
-      username: this.#credentials.username,
-      password: this.#credentials.password,
-      token,
-    })
+    const credentials = this.#credentials
+    const ack =
+      'jwt' in credentials
+        ? await this.call('loginByToken', credentials.jwt)
+        : await this.call('login', {
+            username: credentials.username,
+            password: credentials.password,
+            token: credentials.totpSecret ? authenticator.generate(credentials.totpSecret) : '',
+          })
 
     if (ack?.tokenRequired) {
       throw new Error(
@@ -120,6 +134,7 @@ export class KumaSession {
       throw new Error(describeAckFailure('login', ack))
     }
     this.#logger.debug('authenticated with Kuma')
+    this.#jwt = ack.token ?? null
   }
 
   #capturePush(socket: Socket, event: string): Promise<unknown> {

@@ -9,6 +9,7 @@ const kumaMonitorSchema = z.looseObject({
   name: z.string(),
   url: z.string().nullable().optional(),
   active: z.union([z.boolean(), z.number()]),
+  forceInactive: z.boolean().optional(),
   description: z.string().nullable().optional(),
 })
 
@@ -18,7 +19,12 @@ const kumaNotificationSchema = z.looseObject({
   active: z.union([z.boolean(), z.number()]),
 })
 
-const MONITOR_DEFAULTS = {
+const monitorListSchema = z.record(z.string(), kumaMonitorSchema)
+
+type KumaMonitor = z.infer<typeof kumaMonitorSchema>
+
+// The 2.x `add` handler JSON-encodes these columns unconditionally; omitting them breaks NOT NULL.
+const CREATE_DEFAULTS = {
   type: 'http',
   method: 'GET',
   accepted_statuscodes: ['200-299'],
@@ -30,20 +36,25 @@ const MONITOR_DEFAULTS = {
   httpBodyEncoding: 'json',
   authMethod: null,
   parent: null,
+  conditions: [],
+  kafkaProducerBrokers: [],
+  kafkaProducerSaslOptions: { mechanism: 'None' },
+  rabbitmqNodes: [],
 } as const
 
-const toPayload = (spec: MonitorSpec): Record<string, unknown> => ({
-  ...MONITOR_DEFAULTS,
+const managedFields = (spec: MonitorSpec): Record<string, unknown> => ({
   name: spec.name,
   url: spec.url,
+  description: spec.description,
   interval: spec.settings.intervalSeconds,
   retryInterval: spec.settings.intervalSeconds,
   maxretries: spec.settings.retries,
   timeout: spec.settings.timeoutSeconds,
-  description: spec.description,
   notificationIDList: Object.fromEntries(spec.settings.notificationIds.map((id) => [id, true])),
-  active: true,
 })
+
+const readMonitorList = async (session: KumaSession): Promise<Record<string, KumaMonitor>> =>
+  monitorListSchema.parse(await session.pushed('monitorList'))
 
 export class KumaMonitorReader implements IMonitorReader {
   readonly #session: KumaSession
@@ -53,14 +64,14 @@ export class KumaMonitorReader implements IMonitorReader {
   }
 
   async listMonitors(): Promise<Monitor[]> {
-    const list = z
-      .record(z.string(), kumaMonitorSchema)
-      .parse(await this.#session.pushed('monitorList'))
+    const list = await readMonitorList(this.#session)
     return Object.values(list).map((raw) => ({
       id: raw.id,
       name: raw.name,
       url: raw.url ?? null,
-      isActive: Boolean(raw.active),
+      // 2.x reports a child of a paused group as inactive; its own flag is then unknown, and
+      // treating it as paused would resume it every cycle.
+      isActive: Boolean(raw.active) || raw.forceInactive === true,
       description: raw.description ?? null,
     }))
   }
@@ -74,15 +85,25 @@ export class KumaMonitorWriter implements IMonitorWriter {
   }
 
   async createMonitor(spec: MonitorSpec): Promise<number> {
-    const ack = await this.#session.call('add', toPayload(spec))
+    const ack = await this.#session.call('add', {
+      ...CREATE_DEFAULTS,
+      ...managedFields(spec),
+      active: true,
+    })
     if (!ack?.ok || typeof ack.monitorID !== 'number') {
       throw new Error(describeAckFailure('add', ack))
     }
     return ack.monitorID
   }
 
+  // `editMonitor` overwrites every column from the payload, so send Kuma's own copy back with only
+  // our fields changed — exactly what its UI does. A partial payload would null out the rest.
   async updateMonitor(id: number, spec: MonitorSpec): Promise<void> {
-    await this.#session.expectOk('editMonitor', { ...toPayload(spec), id })
+    const current = (await readMonitorList(this.#session))[String(id)]
+    if (!current) {
+      throw new Error(`Kuma monitor ${id} disappeared before it could be updated`)
+    }
+    await this.#session.expectOk('editMonitor', { ...current, ...managedFields(spec), id })
   }
 
   async pauseMonitor(id: number): Promise<void> {
@@ -94,7 +115,7 @@ export class KumaMonitorWriter implements IMonitorWriter {
   }
 
   async deleteMonitor(id: number): Promise<void> {
-    await this.#session.expectOk('deleteMonitor', id)
+    await this.#session.expectOk('deleteMonitor', id, false)
   }
 }
 
