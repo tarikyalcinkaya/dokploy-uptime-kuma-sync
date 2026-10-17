@@ -31,7 +31,7 @@ const queryDomains = (sql: Sql) => sql`
 		AND d."domainType" IS DISTINCT FROM 'preview'
 		AND d.host IS NOT NULL
 		AND btrim(d.host) <> ''
-	ORDER BY d."createdAt"
+	ORDER BY d."createdAt", d."domainId"
 `
 
 const domainRowSchema = z.object({
@@ -87,7 +87,10 @@ export class PostgresDomainSource implements IDomainSource {
         idle_timeout: DB_TIMEOUT_SECONDS,
         prepare: false,
         // Bounds a query stuck behind a lock; in loop mode it would otherwise hang the worker for good.
-        connection: { statement_timeout: this.#statementTimeoutMs },
+        connection: {
+          statement_timeout: this.#statementTimeoutMs,
+          default_transaction_read_only: true,
+        },
         onnotice: () => undefined,
       })
     } catch (error) {

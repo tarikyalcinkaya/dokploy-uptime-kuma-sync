@@ -154,6 +154,15 @@ describe('buildPlan duplicate endpoints', () => {
     )
   })
 
+  it('keeps the duplicate that already has a monitor, even over https', () => {
+    const plan = buildPlan(
+      [domain({ isHttps: false }), domain({ domainId: 'dom2' })],
+      [monitor({ url: 'http://app.example.com' })],
+      flat,
+    )
+    assert.deepEqual([plan.create.length, plan.update.length, plan.retire.length], [0, 0, 0])
+  })
+
   it('retires the monitor a duplicate already had', () => {
     const duplicate = monitor({ id: 2, description: `x\n${MANAGED_MARKER_PREFIX}dom2` })
     const plan = buildPlan([domain(), domain({ domainId: 'dom2' })], [monitor(), duplicate], flat)
@@ -190,6 +199,23 @@ describe('buildPlan intervals', () => {
 })
 
 describe('buildPlan with project groups', () => {
+  it('keeps the project in the name of a domain that has no project to group under', () => {
+    const plan = buildPlan([domain({ projectId: null })], [], grouped)
+    assert.equal(plan.create[0]?.spec.name, 'proj · api · app.example.com')
+    assert.equal(plan.groups.create.length, 0)
+  })
+
+  it('moves a child to its new project and deletes the group it left empty', () => {
+    const other = group({ id: 60, name: 'old', description: describeGroupOwnership('p0') })
+    const placed = monitor({ name: 'api · app.example.com', parentId: 60 })
+    const plan = buildPlan([domain()], [group(), other, placed], grouped)
+    assert.equal(plan.update[0]?.spec.parentId, 50)
+    assert.deepEqual(
+      plan.groups.retire.map(({ id }) => id),
+      [60],
+    )
+  })
+
   it('creates the group and leaves the parent to be filled once it exists', () => {
     const plan = buildPlan([domain()], [], grouped)
     assert.deepEqual(

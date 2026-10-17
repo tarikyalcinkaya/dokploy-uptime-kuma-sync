@@ -35,8 +35,7 @@ export interface PlanOptions {
 export interface PlannedMonitor {
   domain: DokployDomain
   spec: MonitorSpec
-  // Set when the monitor belongs in a group that this run has yet to create; its id fills
-  // `spec.parentId` once the group exists.
+  // The group this run has yet to create; its id fills `spec.parentId` once it exists.
   pendingGroupKey: string | null
 }
 
@@ -59,14 +58,19 @@ const endpointOf = (domain: DokployDomain, rules: MonitorRules): string =>
     .replace(/^https?:\/\//, '')
     .toLowerCase()
 
-// Several Dokploy rows can serve one endpoint (http next to https, a domain added twice); one
-// monitor is enough, and https wins.
-const uniqueEndpoints = (domains: DokployDomain[], rules: MonitorRules): DokployDomain[] => {
+// The row that already has a monitor wins so its history stays put; https breaks the remaining ties.
+const uniqueEndpoints = (
+  domains: DokployDomain[],
+  rules: MonitorRules,
+  ownedDomainIds: ReadonlySet<string>,
+): DokployDomain[] => {
+  const rank = (domain: DokployDomain): number =>
+    (ownedDomainIds.has(domain.domainId) ? 2 : 0) + (domain.isHttps ? 1 : 0)
   const byEndpoint = new Map<string, DokployDomain>()
   for (const domain of domains) {
     const key = endpointOf(domain, rules)
     const kept = byEndpoint.get(key)
-    if (!kept || (!kept.isHttps && domain.isHttps)) {
+    if (!kept || rank(domain) > rank(kept)) {
       byEndpoint.set(key, domain)
     }
   }
@@ -83,7 +87,7 @@ const planMonitor = (
   return {
     domain,
     spec: {
-      name: toMonitorName(domain, options.isGrouped),
+      name: toMonitorName(domain, groupKey !== null),
       url: toMonitorUrl(domain, findHostRule(options.rules.healthPaths, domain.host)),
       description: describeOwnership(domain.domainId),
       parentId,
@@ -128,8 +132,7 @@ const findManagedMonitors = (monitors: Monitor[]): Map<string, Monitor> => {
   return managed
 }
 
-// Parents that still have a child after this run: everything under a group except the monitors
-// this run deletes or moves elsewhere.
+// A group survives while anything stays under it that this run neither deletes nor moves.
 const survivingChildParents = (
   monitors: Monitor[],
   plan: Omit<ReconcilePlan, 'groups'>,
@@ -158,8 +161,8 @@ export const buildPlan = (
   monitors: Monitor[],
   options: PlanOptions,
 ): ReconcilePlan => {
-  const domains = uniqueEndpoints(allDomains, options.rules)
   const managed = findManagedMonitors(monitors)
+  const domains = uniqueEndpoints(allDomains, options.rules, new Set(managed.keys()))
   const groups = findManagedGroups(monitors)
   const groupPlan = buildGroupPlan(
     domains,

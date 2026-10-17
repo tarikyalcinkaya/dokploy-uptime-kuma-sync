@@ -147,6 +147,14 @@ See `.env.example`. Worth calling out:
 | `MONITOR_INTERVAL_SECONDS` | 120 for a project's default environment; `MONITOR_INTERVAL_SECONDS_OTHER_ENVS` (300) for the rest.                           |
 | `MONITOR_TIMEOUT_SECONDS`  | Must stay below both intervals; Kuma rejects the monitor otherwise.                                                          |
 
+## Upgrading an existing install
+
+The first applied cycle after the upgrade touches every monitor once: names change to
+`service · host` under a group per project (or `project · service · host` with
+`GROUP_BY_PROJECT=false`), intervals move to 120/300 seconds and certificate-expiry alerts switch on.
+Monitors that duplicated an endpoint are retired. Run it with `DRY_RUN=true` first and read the plan;
+if the retire count trips `MAX_RETIRE_RATIO`, raise it for that one run.
+
 ## Troubleshooting
 
 **`Invalid URL` / `could not read domains`** — `DATABASE_URL` did not parse. Two causes, both common:

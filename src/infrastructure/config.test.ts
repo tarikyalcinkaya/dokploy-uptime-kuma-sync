@@ -64,7 +64,12 @@ describe('loadConfig', () => {
       /MONITOR_TIMEOUT_SECONDS must be lower/,
     )
     assert.throws(
-      () => loadConfig({ ...minimal, MONITOR_INTERVAL_SECONDS_OTHER_ENVS: '16' }),
+      () =>
+        loadConfig({
+          ...minimal,
+          MONITOR_INTERVAL_SECONDS_OTHER_ENVS: '25',
+          MONITOR_TIMEOUT_SECONDS: '30',
+        }),
       /MONITOR_TIMEOUT_SECONDS must be lower/,
     )
   })
@@ -90,6 +95,37 @@ describe('loadConfig', () => {
     assert.throws(
       () => loadConfig({ ...minimal, ACCEPTED_STATUS_CODES: 'api=ok' }),
       /ACCEPTED_STATUS_CODES/,
+    )
+  })
+
+  it('treats an empty line as unset instead of coercing it to zero', () => {
+    assert.equal(loadConfig({ ...minimal, MAX_RETIRE_RATIO: '' }).MAX_RETIRE_RATIO, 0.5)
+  })
+
+  it('rejects intervals Kuma would refuse and non-numeric notification ids', () => {
+    assert.throws(
+      () => loadConfig({ ...minimal, MONITOR_INTERVAL_SECONDS: '19' }),
+      /MONITOR_INTERVAL/,
+    )
+    assert.throws(
+      () => loadConfig({ ...minimal, KUMA_NOTIFICATION_IDS: 'telegram' }),
+      /KUMA_NOTIFICATION_IDS/,
+    )
+  })
+
+  it('keeps the Kuma password off plain http outside the host and the Docker network', () => {
+    assert.throws(() => loadConfig({ ...minimal, KUMA_URL: 'http://kuma.example.com' }), /KUMA_URL/)
+    assert.throws(
+      () => loadConfig({ ...minimal, KUMA_URL: 'https://u:p@kuma.example.com' }),
+      /KUMA_URL/,
+    )
+    assert.equal(
+      loadConfig({ ...minimal, KUMA_URL: 'http://uptime-kuma:3001' }).KUMA_URL,
+      'http://uptime-kuma:3001',
+    )
+    assert.equal(
+      loadConfig({ ...minimal, KUMA_URL: 'http://127.0.0.1:3001' }).KUMA_URL,
+      'http://127.0.0.1:3001',
     )
   })
 })

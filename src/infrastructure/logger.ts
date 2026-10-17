@@ -7,7 +7,18 @@ export const createLogger = (level: string, format: LogFormat = 'json') =>
     level,
     // Never let a Kuma password or TOTP secret reach the log stream.
     redact: {
-      paths: ['password', 'KUMA_PASSWORD', 'KUMA_TOTP_SECRET', 'DATABASE_URL', 'token'],
+      paths: [
+        'password',
+        'token',
+        'jwt',
+        'KUMA_PASSWORD',
+        'KUMA_TOTP_SECRET',
+        'KUMA_PUSH_URL',
+        'DATABASE_URL',
+        '*.password',
+        '*.token',
+        '*.jwt',
+      ],
       censor: '[redacted]',
     },
     transport:

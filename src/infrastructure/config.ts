@@ -9,6 +9,9 @@ const boolish = z
 
 const positiveInt = z.coerce.number().int().positive()
 
+// Kuma refuses monitor intervals below 20 seconds.
+const monitorInterval = z.coerce.number().int().min(20)
+
 const logLevel = z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info')
 
 const logFormat = z.enum(['json', 'pretty']).default('json')
@@ -22,12 +25,28 @@ export const unquote = (value: string): string => {
   return quoted ? value.slice(1, -1) : value
 }
 
+// An empty `KEY=` line means unset; coerced, it would silently become 0 or false.
 const normalise = (env: Env): Record<string, string> =>
   Object.fromEntries(
     Object.entries(env)
       .filter((entry): entry is [string, string] => entry[1] !== undefined)
-      .map(([key, value]) => [key, unquote(value)]),
+      .map(([key, value]) => [key, unquote(value)])
+      .filter(([, value]) => value !== ''),
   )
+
+// The admin password crosses this URL, so plain http is only allowed where it never leaves the
+// host or the Docker network: loopback, or a dotless container name such as `uptime-kuma`.
+const kumaUrl = z.url().refine(
+  (value) => {
+    const url = new URL(value)
+    const isPrivate = !url.hostname.includes('.') || ['127.0.0.1', '[::1]'].includes(url.hostname)
+    return url.username === '' && (url.protocol === 'https:' || isPrivate)
+  },
+  {
+    message:
+      'must be https (http only for localhost or a Docker service name) and carry no credentials',
+  },
+)
 
 const databaseUrl = z
   .string()
@@ -85,7 +104,7 @@ const databaseConfigSchema = z.object({
 })
 
 const kumaConfigSchema = z.object({
-  KUMA_URL: z.url(),
+  KUMA_URL: kumaUrl,
   KUMA_USERNAME: z.string().min(1),
   KUMA_PASSWORD: z.string().min(1),
   KUMA_TOTP_SECRET: z.string().min(1).optional(),
@@ -94,16 +113,16 @@ const kumaConfigSchema = z.object({
 })
 
 const configSchema = databaseConfigSchema.extend(kumaConfigSchema.shape).extend({
-  KUMA_PUSH_URL: z.url().optional(),
-  KUMA_NOTIFICATION_IDS: commaList,
+  KUMA_PUSH_URL: kumaUrl.optional(),
+  KUMA_NOTIFICATION_IDS: commaList.pipe(z.array(z.string().regex(/^\d+$/, 'must be numeric ids'))),
   DRY_RUN: boolish.default(true),
   RUN_MODE: z.enum(['once', 'loop']).default('once'),
   INTERVAL_SECONDS: positiveInt.default(900),
   ON_REMOVE: z.enum(['pause', 'delete']).default('pause'),
   ACCEPTED_STATUS_CODES: hostRules(statusCodes),
   MAX_RETIRE_RATIO: z.coerce.number().min(0).max(1).default(0.5),
-  MONITOR_INTERVAL_SECONDS: positiveInt.default(120),
-  MONITOR_INTERVAL_SECONDS_OTHER_ENVS: positiveInt.default(300),
+  MONITOR_INTERVAL_SECONDS: monitorInterval.default(120),
+  MONITOR_INTERVAL_SECONDS_OTHER_ENVS: monitorInterval.default(300),
   MONITOR_EXPIRY_NOTIFICATION: boolish.default(true),
   MONITOR_RETRIES: z.coerce.number().int().min(0).default(2),
   MONITOR_TIMEOUT_SECONDS: positiveInt.default(16),

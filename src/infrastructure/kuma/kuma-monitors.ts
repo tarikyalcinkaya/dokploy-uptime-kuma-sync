@@ -23,12 +23,13 @@ const kumaMonitorSchema = z.looseObject({
   active: z.union([z.boolean(), z.number()]),
   forceInactive: z.boolean().optional(),
   description: z.string().nullable().optional(),
-  interval: z.number(),
-  maxretries: z.number(),
-  timeout: z.number(),
-  expiryNotification: z.boolean(),
-  accepted_statuscodes: z.array(z.string()),
-  notificationIDList: z.record(z.string(), z.boolean()).optional(),
+  // Lenient: one odd hand-made monitor must not fail a cycle that never touches it.
+  interval: z.number().nullish(),
+  maxretries: z.number().nullish(),
+  timeout: z.number().nullish(),
+  expiryNotification: z.boolean().nullish(),
+  accepted_statuscodes: z.array(z.string()).nullish(),
+  notificationIDList: z.record(z.string(), z.boolean()).nullish(),
 })
 
 const kumaNotificationSchema = z.looseObject({
@@ -97,8 +98,7 @@ const addMonitor = async (
   return ack.monitorID
 }
 
-// `editMonitor` overwrites every column from the payload, so send Kuma's own copy back with only
-// our fields changed — exactly what its UI does. A partial payload would null out the rest.
+// `editMonitor` overwrites every column, so Kuma's own copy goes back with only our fields changed.
 const editMonitor = async (
   session: KumaSession,
   id: number,
@@ -126,16 +126,15 @@ export class KumaMonitorReader implements IMonitorReader {
       url: raw.url ?? null,
       isGroup: raw.type === 'group',
       parentId: raw.parent ?? null,
-      // 2.x reports a child of a paused group as inactive; its own flag is then unknown, and
-      // treating it as paused would resume it every cycle.
+      // Under a paused group the child's own flag is hidden; reading it as paused would resume it.
       isActive: Boolean(raw.active) || raw.forceInactive === true,
       description: raw.description ?? null,
-      acceptedStatusCodes: raw.accepted_statuscodes,
+      acceptedStatusCodes: raw.accepted_statuscodes ?? [],
       settings: {
-        intervalSeconds: raw.interval,
-        retries: raw.maxretries,
-        timeoutSeconds: raw.timeout,
-        notifiesCertificateExpiry: raw.expiryNotification,
+        intervalSeconds: raw.interval ?? 0,
+        retries: raw.maxretries ?? 0,
+        timeoutSeconds: raw.timeout ?? 0,
+        notifiesCertificateExpiry: raw.expiryNotification ?? false,
         notificationIds: Object.entries(raw.notificationIDList ?? {})
           .filter(([, isOn]) => isOn)
           .map(([id]) => id),
