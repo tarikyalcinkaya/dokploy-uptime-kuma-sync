@@ -1,6 +1,6 @@
 import type { ILogger } from './application/logger.js'
 import { reconcileMonitors, type ReconcileMonitorsInput } from './application/reconcile-monitors.js'
-import { type Config, loadConfig } from './infrastructure/config.js'
+import { type Config, loadConfig, toExclusions } from './infrastructure/config.js'
 import { PostgresDomainSource } from './infrastructure/dokploy/postgres-domain-source.js'
 import { sendHeartbeat } from './infrastructure/heartbeat.js'
 import {
@@ -33,6 +33,7 @@ const toReconcileInput = (config: Config): ReconcileMonitorsInput => ({
   maxRetireRatio: config.MAX_RETIRE_RATIO,
   isGrouped: config.GROUP_BY_PROJECT,
   rules: { healthPaths: config.HEALTH_PATHS, acceptedStatusCodes: config.ACCEPTED_STATUS_CODES },
+  exclusions: toExclusions(config),
   monitorSettings: {
     intervalSeconds: config.MONITOR_INTERVAL_SECONDS,
     retries: config.MONITOR_RETRIES,

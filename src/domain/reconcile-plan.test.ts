@@ -33,6 +33,7 @@ const domain = (overrides: Partial<DokployDomain> = {}): DokployDomain => ({
   isDefaultEnvironment: true,
   projectId: 'p1',
   projectName: 'proj',
+  middlewares: [],
   ...overrides,
 })
 

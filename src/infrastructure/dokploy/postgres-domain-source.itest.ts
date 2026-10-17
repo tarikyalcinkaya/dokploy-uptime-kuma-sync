@@ -20,7 +20,15 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
         kind: 'compose',
         serviceId: 'c1',
         serviceName: 'api',
-        domains: [{ domainId: 'd2', host: 'api.example.com', https: false, path: '/v1' }],
+        domains: [
+          {
+            domainId: 'd2',
+            host: 'api.example.com',
+            https: false,
+            path: '/v1',
+            middlewares: ['vpn-only@file'],
+          },
+        ],
       },
     ])
 
@@ -38,6 +46,7 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
         projectName: 'shop',
         serviceName: 'web',
         isDefaultEnvironment: true,
+        middlewares: [],
       },
       {
         domainId: 'd2',
@@ -50,6 +59,7 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
         projectName: 'shop',
         serviceName: 'api',
         isDefaultEnvironment: true,
+        middlewares: ['vpn-only@file'],
       },
     ])
   })

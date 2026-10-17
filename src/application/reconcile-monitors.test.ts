@@ -78,7 +78,11 @@ const silent: ILogger = { debug: () => {}, info: () => {}, warn: () => {}, error
 
 const source = (domains: DokployDomain[]): IDomainSource => ({ listDomains: async () => domains })
 
-const domain = (domainId: string, host = `${domainId}.example.com`): DokployDomain => ({
+const domain = (
+  domainId: string,
+  host = `${domainId}.example.com`,
+  middlewares: string[] = [],
+): DokployDomain => ({
   domainId,
   host,
   isHttps: true,
@@ -89,6 +93,7 @@ const domain = (domainId: string, host = `${domainId}.example.com`): DokployDoma
   isDefaultEnvironment: true,
   projectId: 'p1',
   projectName: 'proj',
+  middlewares,
 })
 
 const managed = (id: number, domainId: string, overrides: Partial<Monitor> = {}): Monitor => ({
@@ -108,6 +113,7 @@ const input = (overrides: Partial<ReconcileMonitorsInput> = {}): ReconcileMonito
   maxRetireRatio: 0.5,
   isGrouped: false,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
+  exclusions: { hosts: [], projects: [], services: [], middlewares: [] },
   monitorSettings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
   ...overrides,
 })
@@ -244,5 +250,13 @@ describe('reconcileMonitors', () => {
         ['https://web.example.com', ['200-299', '401']],
       ],
     )
+  })
+
+  it('leaves excluded domains out and retires the monitor of one that became excluded', async () => {
+    const kuma = new FakeKuma([managed(1, 'keep'), managed(2, 'vpn')])
+    await run(kuma, [domain('keep'), domain('vpn', 'vpn.example.com', ['vpn-only@file'])], {
+      exclusions: { hosts: [], projects: [], services: [], middlewares: ['vpn-only@file'] },
+    })
+    assert.deepEqual(kuma.calls, [['pauseMonitor', 2]])
   })
 })

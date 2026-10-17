@@ -1,6 +1,6 @@
 // Prints the domains the sync would manage. Needs DATABASE_URL only — Kuma is never contacted.
 import { listManagedDomains } from '../application/list-managed-domains.js'
-import { loadDatabaseConfig } from '../infrastructure/config.js'
+import { loadDatabaseConfig, toExclusions } from '../infrastructure/config.js'
 import { PostgresDomainSource } from '../infrastructure/dokploy/postgres-domain-source.js'
 import { createLogger } from '../infrastructure/logger.js'
 import { errorMessage } from '../shared/errors.js'
@@ -13,6 +13,7 @@ const main = async (): Promise<void> => {
     new PostgresDomainSource(config.DATABASE_URL),
     config.GROUP_BY_PROJECT,
     config.HEALTH_PATHS,
+    toExclusions(config),
   )
   logger.info({ count: domains.length }, 'domains Dokploy is serving')
   for (const domain of domains) {

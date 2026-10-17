@@ -22,6 +22,7 @@ const input: ReconcileMonitorsInput = {
   maxRetireRatio: 0.5,
   isGrouped: true,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
+  exclusions: { hosts: [], projects: [], services: [], middlewares: [] },
   monitorSettings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
 }
 
