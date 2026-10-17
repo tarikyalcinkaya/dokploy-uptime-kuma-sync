@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { databaseUrl, seedDokploy } from '../../testing/fixtures.js'
+import { databaseUrl, seedDokploy, withDatabase } from '../../testing/fixtures.js'
 import { PostgresDomainSource } from './postgres-domain-source.js'
 
 describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
@@ -84,6 +84,18 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
     assert.deepEqual(
       domains.map((domain) => domain.domainId),
       ['keep'],
+    )
+  })
+
+  it('gives up on a query stuck behind a lock instead of waiting forever', async () => {
+    await withDatabase((sql) =>
+      sql.begin(async (transaction) => {
+        await transaction`LOCK TABLE domain IN ACCESS EXCLUSIVE MODE`
+        await assert.rejects(
+          new PostgresDomainSource(databaseUrl(), 500).listDomains(),
+          /statement timeout/,
+        )
+      }),
     )
   })
 })
