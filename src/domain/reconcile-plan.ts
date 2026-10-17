@@ -54,6 +54,25 @@ export interface ReconcilePlan {
   domainCount: number
 }
 
+const endpointOf = (domain: DokployDomain, rules: MonitorRules): string =>
+  toMonitorUrl(domain, findHostRule(rules.healthPaths, domain.host))
+    .replace(/^https?:\/\//, '')
+    .toLowerCase()
+
+// Several Dokploy rows can serve one endpoint (http next to https, a domain added twice); one
+// monitor is enough, and https wins.
+const uniqueEndpoints = (domains: DokployDomain[], rules: MonitorRules): DokployDomain[] => {
+  const byEndpoint = new Map<string, DokployDomain>()
+  for (const domain of domains) {
+    const key = endpointOf(domain, rules)
+    const kept = byEndpoint.get(key)
+    if (!kept || (!kept.isHttps && domain.isHttps)) {
+      byEndpoint.set(key, domain)
+    }
+  }
+  return [...byEndpoint.values()]
+}
+
 const planMonitor = (
   domain: DokployDomain,
   options: PlanOptions,
@@ -135,10 +154,11 @@ const survivingChildParents = (
 }
 
 export const buildPlan = (
-  domains: DokployDomain[],
+  allDomains: DokployDomain[],
   monitors: Monitor[],
   options: PlanOptions,
 ): ReconcilePlan => {
+  const domains = uniqueEndpoints(allDomains, options.rules)
   const managed = findManagedMonitors(monitors)
   const groups = findManagedGroups(monitors)
   const groupPlan = buildGroupPlan(
