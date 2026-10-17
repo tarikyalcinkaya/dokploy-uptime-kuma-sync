@@ -1,16 +1,22 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import type { DokployDomain } from '../domain/dokploy-domain.js'
-import type { Monitor, MonitorSpec } from '../domain/monitor.js'
-import { describeOwnership } from '../domain/ownership.js'
-import type { IDomainSource, IMonitorReader, IMonitorWriter } from '../domain/ports.js'
+import type { GroupSpec, Monitor, MonitorSpec } from '../domain/monitor.js'
+import { describeGroupOwnership, describeOwnership } from '../domain/ownership.js'
+import type {
+  IDomainSource,
+  IGroupWriter,
+  IMonitorReader,
+  IMonitorWriter,
+} from '../domain/ports.js'
 import type { ILogger } from './logger.js'
 import { type ReconcileMonitorsInput, reconcileMonitors } from './reconcile-monitors.js'
 
 type Call = [method: string, ...args: unknown[]]
 
-class FakeKuma implements IMonitorReader, IMonitorWriter {
+class FakeKuma implements IMonitorReader, IMonitorWriter, IGroupWriter {
   readonly calls: Call[] = []
+  readonly parents = new Map<string, number | null>()
   #nextId = 100
 
   constructor(
@@ -24,11 +30,13 @@ class FakeKuma implements IMonitorReader, IMonitorWriter {
 
   async createMonitor(spec: MonitorSpec): Promise<number> {
     this.#record('createMonitor', spec.url)
+    this.parents.set(spec.url, spec.parentId)
     return this.#nextId++
   }
 
   async updateMonitor(id: number, spec: MonitorSpec): Promise<void> {
     this.#record('updateMonitor', id, spec.url)
+    this.parents.set(spec.url, spec.parentId)
   }
 
   async pauseMonitor(id: number): Promise<void> {
@@ -41,6 +49,19 @@ class FakeKuma implements IMonitorReader, IMonitorWriter {
 
   async deleteMonitor(id: number): Promise<void> {
     this.#record('deleteMonitor', id)
+  }
+
+  async createGroup(spec: GroupSpec): Promise<number> {
+    this.#record('createGroup', spec.name)
+    return this.#nextId++
+  }
+
+  async updateGroup(id: number, spec: GroupSpec): Promise<void> {
+    this.#record('updateGroup', id, spec.name)
+  }
+
+  async deleteGroup(id: number): Promise<void> {
+    this.#record('deleteGroup', id)
   }
 
   #record(method: string, ...args: unknown[]): void {
@@ -63,13 +84,17 @@ const domain = (domainId: string, host = `${domainId}.example.com`): DokployDoma
   domainType: 'application',
   serviceName: 'api',
   environmentName: 'production',
+  isDefaultEnvironment: true,
+  projectId: 'p1',
   projectName: 'proj',
 })
 
 const managed = (id: number, domainId: string, overrides: Partial<Monitor> = {}): Monitor => ({
   id,
-  name: `proj/api · ${domainId}.example.com`,
+  name: `proj · api · ${domainId}.example.com`,
   url: `https://${domainId}.example.com`,
+  isGroup: false,
+  parentId: null,
   isActive: true,
   description: describeOwnership(domainId),
   ...overrides,
@@ -79,6 +104,7 @@ const input = (overrides: Partial<ReconcileMonitorsInput> = {}): ReconcileMonito
   isDryRun: false,
   onRemove: 'pause',
   maxRetireRatio: 0.5,
+  isGrouped: false,
   monitorSettings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
   ...overrides,
 })
@@ -92,6 +118,7 @@ const run = (
     domains: source(domains),
     monitorReader: kuma,
     monitorWriter: kuma,
+    groupWriter: kuma,
     logger: silent,
   })
 
@@ -154,6 +181,8 @@ describe('reconcileMonitors', () => {
       id: 9,
       name: 'hand made',
       url: null,
+      isGroup: false,
+      parentId: null,
       isActive: true,
       description: null,
     }
@@ -166,5 +195,34 @@ describe('reconcileMonitors', () => {
     const kuma = new FakeKuma([managed(1, 'keep'), managed(2, 'gone')], 'pauseMonitor')
     await assert.rejects(run(kuma, [domain('keep'), domain('new')]), /pauseMonitor rejected/)
     assert.deepEqual(kuma.calls, [['createMonitor', 'https://new.example.com']])
+  })
+
+  it('creates the project group first and puts the new monitor under it', async () => {
+    const kuma = new FakeKuma([])
+    await run(kuma, [domain('new')], { isGrouped: true })
+    assert.deepEqual(kuma.calls, [
+      ['createGroup', 'proj'],
+      ['createMonitor', 'https://new.example.com'],
+    ])
+    assert.equal(kuma.parents.get('https://new.example.com'), 100)
+  })
+
+  it('deletes an emptied group only after its last child is gone', async () => {
+    const group: Monitor = {
+      id: 50,
+      name: 'proj',
+      url: null,
+      isGroup: true,
+      parentId: null,
+      isActive: true,
+      description: describeGroupOwnership('p2'),
+    }
+    const child = managed(2, 'gone', { name: 'api · gone.example.com', parentId: 50 })
+    const kuma = new FakeKuma([managed(1, 'keep'), group, child])
+    await run(kuma, [domain('keep')], { onRemove: 'delete' })
+    assert.deepEqual(kuma.calls, [
+      ['deleteMonitor', 2],
+      ['deleteGroup', 50],
+    ])
   })
 })

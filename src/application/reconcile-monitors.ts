@@ -1,15 +1,25 @@
 import { findGuardViolation } from '../domain/guard.js'
-import type { MonitorSettings } from '../domain/monitor.js'
-import type { IDomainSource, IMonitorReader, IMonitorWriter } from '../domain/ports.js'
-import { buildPlan, type ReconcilePlan } from '../domain/reconcile-plan.js'
+import type { MonitorSettings, MonitorSpec } from '../domain/monitor.js'
+import type {
+  IDomainSource,
+  IGroupWriter,
+  IMonitorReader,
+  IMonitorWriter,
+} from '../domain/ports.js'
+import {
+  buildPlan,
+  type PlannedMonitor,
+  type ReconcilePlan,
+  type RemovalAction,
+} from '../domain/reconcile-plan.js'
 import type { ILogger } from './logger.js'
-
-export type RemovalAction = 'pause' | 'delete'
+import { logDryRun, logPlanSummary } from './plan-report.js'
 
 export interface ReconcileMonitorsInput {
   isDryRun: boolean
   onRemove: RemovalAction
   maxRetireRatio: number
+  isGrouped: boolean
   monitorSettings: MonitorSettings
 }
 
@@ -17,52 +27,48 @@ export interface ReconcileMonitorsDeps {
   domains: IDomainSource
   monitorReader: IMonitorReader
   monitorWriter: IMonitorWriter
+  groupWriter: IGroupWriter
   logger: ILogger
 }
 
-const logPlan = (plan: ReconcilePlan, logger: ILogger): void => {
-  logger.info(
-    {
-      domains: plan.domainCount,
-      managed: plan.managedCount,
-      create: plan.create.length,
-      update: plan.update.length,
-      revive: plan.revive.length,
-      retire: plan.retire.length,
-    },
-    'reconcile plan',
-  )
+const applyGroups = async (
+  plan: ReconcilePlan,
+  { groupWriter, logger }: ReconcileMonitorsDeps,
+): Promise<Map<string, number>> => {
+  const groupIds = new Map(plan.groups.existingIds)
+  for (const { key, spec } of plan.groups.create) {
+    const id = await groupWriter.createGroup(spec)
+    groupIds.set(key, id)
+    logger.info({ group: spec.name, monitorId: id }, 'group created')
+  }
+  for (const { group, spec } of plan.groups.update) {
+    await groupWriter.updateGroup(group.id, spec)
+    logger.info({ group: spec.name, monitorId: group.id }, 'group renamed')
+  }
+  return groupIds
 }
 
-const reportDryRun = (plan: ReconcilePlan, onRemove: RemovalAction, logger: ILogger): void => {
-  for (const { domain, spec } of plan.create) {
-    logger.info({ host: domain.host, url: spec.url }, 'would create')
-  }
-  for (const { domain, spec } of plan.update) {
-    logger.info({ host: domain.host, url: spec.url }, 'would update')
-  }
-  for (const { domain, monitor } of plan.revive) {
-    logger.info({ host: domain.host, monitorId: monitor.id }, 'would resume')
-  }
-  for (const monitor of plan.retire) {
-    logger.info({ name: monitor.name }, `would ${onRemove}`)
-  }
-  logger.warn('DRY_RUN is on — no changes were sent to Kuma')
-}
+const withParent = (planned: PlannedMonitor, groupIds: Map<string, number>): MonitorSpec =>
+  planned.pendingGroupKey
+    ? { ...planned.spec, parentId: groupIds.get(planned.pendingGroupKey) ?? null }
+    : planned.spec
 
 const applyPlan = async (
   plan: ReconcilePlan,
   onRemove: RemovalAction,
-  { monitorWriter: monitors, logger }: ReconcileMonitorsDeps,
+  deps: ReconcileMonitorsDeps,
 ): Promise<void> => {
-  for (const { domain, spec } of plan.create) {
-    const id = await monitors.createMonitor(spec)
-    logger.info({ host: domain.host, monitorId: id }, 'monitor created')
+  const { monitorWriter: monitors, groupWriter, logger } = deps
+  const groupIds = await applyGroups(plan, deps)
+
+  for (const planned of plan.create) {
+    const id = await monitors.createMonitor(withParent(planned, groupIds))
+    logger.info({ host: planned.domain.host, monitorId: id }, 'monitor created')
   }
 
-  for (const { monitor, domain, spec } of plan.update) {
-    await monitors.updateMonitor(monitor.id, spec)
-    logger.info({ host: domain.host, monitorId: monitor.id }, 'monitor updated')
+  for (const planned of plan.update) {
+    await monitors.updateMonitor(planned.monitor.id, withParent(planned, groupIds))
+    logger.info({ host: planned.domain.host, monitorId: planned.monitor.id }, 'monitor updated')
   }
 
   for (const { monitor, domain } of plan.revive) {
@@ -79,6 +85,11 @@ const applyPlan = async (
       logger.info({ monitorId: monitor.id, name: monitor.name }, 'monitor paused')
     }
   }
+
+  for (const group of plan.groups.retire) {
+    await groupWriter.deleteGroup(group.id)
+    logger.info({ group: group.name, monitorId: group.id }, 'empty group deleted')
+  }
 }
 
 // A run that fails halfway leaves the rest for the next cycle, which recomputes the plan from scratch.
@@ -91,8 +102,12 @@ export const reconcileMonitors = async (
     deps.monitorReader.listMonitors(),
   ])
 
-  const plan = buildPlan(domains, monitors, input.monitorSettings)
-  logPlan(plan, deps.logger)
+  const plan = buildPlan(domains, monitors, {
+    settings: input.monitorSettings,
+    isGrouped: input.isGrouped,
+    onRemove: input.onRemove,
+  })
+  logPlanSummary(plan, deps.logger)
 
   const violation = findGuardViolation(plan, input.maxRetireRatio)
   if (violation) {
@@ -100,7 +115,7 @@ export const reconcileMonitors = async (
   }
 
   if (input.isDryRun) {
-    reportDryRun(plan, input.onRemove, deps.logger)
+    logDryRun(plan, input.onRemove, deps.logger)
     return plan
   }
 

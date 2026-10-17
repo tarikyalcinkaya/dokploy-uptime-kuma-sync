@@ -81,33 +81,30 @@ green forever while no monitor is ever created.
 **Preview-deployment domains are excluded.** They are created and destroyed with pull requests and
 would fill Kuma with monitors that die within days.
 
-## Deferred: how to organise monitors in Kuma
+## Monitor organisation: one group per Dokploy project
 
-**Status:** deferred. Monitors are a flat list named `project/service · host`.
+Each Dokploy project becomes a Kuma group monitor, and every domain sits under its project's group,
+named `service · host`. With `GROUP_BY_PROJECT=false` monitors stay in one flat list named
+`project · service · host`. The environment is named only when it is not the project's default one:
+Dokploy creates a "production" environment with every project, so naming it would be noise on every
+monitor. Organisations are never shown.
 
-Dokploy models organisation → project → environment → service → domain, and a flat list does not
-reflect that. The hierarchy is shallower than it looks, though: Dokploy creates a "production"
-environment automatically with every project, so unless extra environments exist, every monitor would
-carry the same environment name — noise, not information. With a single organisation the same applies
-one level up. The levels that actually distinguish anything are **project and service**.
+Groups are the roughest part of Kuma, and each rule below answers one of its known problems:
 
-The rule worth keeping: show a level only when it discriminates.
+- **Notifications go on children only.** A group reports down when any child is down
+  ([#3937](https://github.com/louislam/uptime-kuma/issues/3937)); with a notification on the group
+  too, one outage would alert twice.
+- **Groups are owned like monitors:** the description carries `dokploy:projectId=<id>`, so a group
+  made by hand is never touched, and a renamed project renames its group instead of making a new one.
+- **A group is deleted only when nothing hangs under it any more.** A paused child keeps its history
+  under the group, and a monitor someone put into our group by hand keeps its parent. The delete
+  itself passes `deleteChildren=false`, so even a stale view can never take children with it.
+- **Groups are never paused.** Kuma ignores paused children when it computes a group's status, so a
+  group whose children are all paused stays quiet; pausing it would instead hide its children's own
+  state behind `forceInactive`.
 
-| Option                    | Gives                           | Cost                                                                                    | Risk                   |
-| ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------- | ---------------------- |
-| Naming only (current)     | alphabetical clustering, search | none                                                                                    | none                   |
-| Tags (`project:x`)        | filtering, coloured badges      | moderate — create tags, map name→id, extend the payload                                 | low; tags are metadata |
-| Group monitors (`parent`) | a real tree in the sidebar      | high — groups must be reconciled too: create, rename, delete when empty, mark ownership | high                   |
-
-Groups are the roughest part of Kuma today. A group reports fully down when any single child is down
-([#3937](https://github.com/louislam/uptime-kuma/issues/3937)), so attaching notifications to a group
-double-alerts. Deleting a monitor leaves orphaned `monitor_group` rows
-([#7526](https://github.com/louislam/uptime-kuma/issues/7526)). Deleting a group affects its children,
-which is exactly the history the guards exist to protect.
-
-If this is revisited, tags plus better naming is the way in; groups can be layered on later, while
-unwinding them is painful. A reasonable trigger to reconsider: somewhere past ~50 domains, or the
-first non-production environment.
+Orphaned `monitor_group` rows after a delete ([#7526](https://github.com/louislam/uptime-kuma/issues/7526))
+are Kuma's to fix and do not affect what this reads.
 
 ## Relationship to Dokploy
 

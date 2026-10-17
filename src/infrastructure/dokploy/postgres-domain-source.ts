@@ -15,6 +15,8 @@ const DOMAIN_QUERY = `
 		d."domainType"    AS "domainType",
 		COALESCE(a.name, c.name) AS "serviceName",
 		e.name            AS "environmentName",
+		(to_jsonb(e)->>'isDefault')::boolean AS "isDefaultEnvironment",
+		p."projectId"     AS "projectId",
 		p.name            AS "projectName"
 	FROM domain d
 	LEFT JOIN application a ON a."applicationId" = d."applicationId"
@@ -36,6 +38,8 @@ const domainRowSchema = z.object({
   domainType: z.string().nullable(),
   serviceName: z.string().nullable(),
   environmentName: z.string().nullable(),
+  isDefaultEnvironment: z.boolean().nullable(),
+  projectId: z.string().nullable(),
   projectName: z.string().nullable(),
 })
 

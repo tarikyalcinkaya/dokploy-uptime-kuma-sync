@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { type DokployDomain, toMonitorName, toMonitorUrl } from './dokploy-domain.js'
+import { type DokployDomain, toGroupName, toMonitorName, toMonitorUrl } from './dokploy-domain.js'
 
 const domain = (overrides: Partial<DokployDomain> = {}): DokployDomain => ({
   domainId: 'dom1',
@@ -10,6 +10,8 @@ const domain = (overrides: Partial<DokployDomain> = {}): DokployDomain => ({
   domainType: 'application',
   serviceName: 'api',
   environmentName: 'production',
+  isDefaultEnvironment: true,
+  projectId: 'p1',
   projectName: 'proj',
   ...overrides,
 })
@@ -30,11 +32,28 @@ describe('toMonitorUrl', () => {
 })
 
 describe('toMonitorName', () => {
-  it('prefixes the host with project and service', () => {
-    assert.equal(toMonitorName(domain()), 'proj/api · app.example.com')
+  it('names project, service and host when monitors sit in one flat list', () => {
+    assert.equal(toMonitorName(domain(), false), 'proj · api · app.example.com')
+  })
+
+  it('leaves the project to the group', () => {
+    assert.equal(toMonitorName(domain(), true), 'api · app.example.com')
+  })
+
+  it('names the environment only when it is not the default one', () => {
+    const staging = domain({ environmentName: 'staging', isDefaultEnvironment: false })
+    assert.equal(toMonitorName(staging, true), 'api · staging · app.example.com')
   })
 
   it('falls back to the bare host without context', () => {
-    assert.equal(toMonitorName(domain({ projectName: null, serviceName: null })), 'app.example.com')
+    const bare = domain({ projectName: null, serviceName: null })
+    assert.equal(toMonitorName(bare, false), 'app.example.com')
+  })
+})
+
+describe('toGroupName', () => {
+  it('uses the project name, then its id', () => {
+    assert.equal(toGroupName(domain()), 'proj')
+    assert.equal(toGroupName(domain({ projectName: null })), 'p1')
   })
 })
