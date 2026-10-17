@@ -8,3 +8,5 @@ export const PUSH_TIMEOUT_MS = 30_000
 export const HEARTBEAT_TIMEOUT_MS = 10_000
 
 export const DB_TIMEOUT_SECONDS = 10
+
+export const DB_STATEMENT_TIMEOUT_MS = 15_000

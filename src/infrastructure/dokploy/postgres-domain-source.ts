@@ -3,11 +3,13 @@ import { z } from 'zod'
 import type { DokployDomain } from '../../domain/dokploy-domain.js'
 import type { IDomainSource } from '../../domain/ports.js'
 import { errorMessage } from '../../shared/errors.js'
-import { DB_TIMEOUT_SECONDS } from '../timeouts.js'
+import { DB_STATEMENT_TIMEOUT_MS, DB_TIMEOUT_SECONDS } from '../timeouts.js'
 
 // `to_jsonb` reads columns that older Dokploy releases lack as NULL instead of failing the query.
 // Preview domains come and go with pull requests and would fill Kuma with monitors that die within days.
-const DOMAIN_QUERY = `
+type Sql = ReturnType<typeof postgres>
+
+const queryDomains = (sql: Sql) => sql`
 	SELECT
 		d."domainId"      AS "domainId",
 		d.host            AS host,
@@ -56,15 +58,17 @@ const toDomain = ({ https, ...row }: z.infer<typeof domainRowSchema>): DokployDo
 
 export class PostgresDomainSource implements IDomainSource {
   readonly #databaseUrl: string
+  readonly #statementTimeoutMs: number
 
-  constructor(databaseUrl: string) {
+  constructor(databaseUrl: string, statementTimeoutMs = DB_STATEMENT_TIMEOUT_MS) {
     this.#databaseUrl = databaseUrl
+    this.#statementTimeoutMs = statementTimeoutMs
   }
 
   async listDomains(): Promise<DokployDomain[]> {
     const sql = this.#connect()
     try {
-      const rows = await sql.unsafe(DOMAIN_QUERY)
+      const rows = await queryDomains(sql)
       return z
         .array(domainRowSchema)
         .parse([...rows])
@@ -75,13 +79,15 @@ export class PostgresDomainSource implements IDomainSource {
   }
 
   // The driver's bare `Invalid URL` hides which of the two usual causes it is, so name both.
-  #connect(): ReturnType<typeof postgres> {
+  #connect(): Sql {
     try {
       return postgres(this.#databaseUrl, {
         max: 1,
         connect_timeout: DB_TIMEOUT_SECONDS,
         idle_timeout: DB_TIMEOUT_SECONDS,
         prepare: false,
+        // Bounds a query stuck behind a lock; in loop mode it would otherwise hang the worker for good.
+        connection: { statement_timeout: this.#statementTimeoutMs },
         onnotice: () => undefined,
       })
     } catch (error) {
