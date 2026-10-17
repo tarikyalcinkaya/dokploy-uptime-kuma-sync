@@ -3,6 +3,7 @@ import { reconcileMonitors, type ReconcileMonitorsInput } from './application/re
 import { type Config, loadConfig, toExclusions } from './infrastructure/config.js'
 import { PostgresDomainSource } from './infrastructure/dokploy/postgres-domain-source.js'
 import { sendHeartbeat } from './infrastructure/heartbeat.js'
+import { markAlive } from './infrastructure/liveness.js'
 import {
   KumaGroupWriter,
   KumaMonitorReader,
@@ -124,6 +125,12 @@ const main = async (): Promise<void> => {
   process.once('SIGINT', () => stop('SIGINT'))
   process.once('SIGTERM', () => stop('SIGTERM'))
 
+  const reportAlive = () =>
+    markAlive(config.ALIVE_FILE).catch((error: unknown) => {
+      logger.warn({ err: errorMessage(error) }, 'could not write the liveness file')
+    })
+  await reportAlive()
+
   while (!controller.signal.aborted) {
     try {
       await cycle(config, logger)
@@ -131,6 +138,7 @@ const main = async (): Promise<void> => {
       // Kuma or Postgres being briefly unreachable is expected; the next cycle starts from scratch.
       logger.error({ err: errorMessage(error) }, 'cycle failed')
     }
+    await reportAlive()
 
     if (controller.signal.aborted) {
       break

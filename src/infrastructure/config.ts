@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Exclusions } from '../domain/exclusion.js'
+import { DEFAULT_ALIVE_FILE } from './liveness.js'
 
 type Env = Record<string, string | undefined>
 
@@ -112,25 +113,35 @@ const kumaConfigSchema = z.object({
   LOG_FORMAT: logFormat,
 })
 
-const configSchema = databaseConfigSchema.extend(kumaConfigSchema.shape).extend({
-  KUMA_PUSH_URL: kumaUrl.optional(),
-  KUMA_NOTIFICATION_IDS: commaList.pipe(z.array(z.string().regex(/^\d+$/, 'must be numeric ids'))),
-  DRY_RUN: boolish.default(true),
+const livenessConfigSchema = z.object({
   RUN_MODE: z.enum(['once', 'loop']).default('once'),
   INTERVAL_SECONDS: positiveInt.default(900),
-  ON_REMOVE: z.enum(['pause', 'delete']).default('pause'),
-  ACCEPTED_STATUS_CODES: hostRules(statusCodes),
-  MAX_RETIRE_RATIO: z.coerce.number().min(0).max(1).default(0.5),
-  MONITOR_INTERVAL_SECONDS: monitorInterval.default(120),
-  MONITOR_INTERVAL_SECONDS_OTHER_ENVS: monitorInterval.default(300),
-  MONITOR_EXPIRY_NOTIFICATION: boolish.default(true),
-  MONITOR_RETRIES: z.coerce.number().int().min(0).default(2),
-  MONITOR_TIMEOUT_SECONDS: positiveInt.default(16),
+  ALIVE_FILE: z.string().min(1).default(DEFAULT_ALIVE_FILE),
 })
+
+const configSchema = databaseConfigSchema
+  .extend(kumaConfigSchema.shape)
+  .extend(livenessConfigSchema.shape)
+  .extend({
+    KUMA_PUSH_URL: kumaUrl.optional(),
+    KUMA_NOTIFICATION_IDS: commaList.pipe(
+      z.array(z.string().regex(/^\d+$/, 'must be numeric ids')),
+    ),
+    DRY_RUN: boolish.default(true),
+    ON_REMOVE: z.enum(['pause', 'delete']).default('pause'),
+    ACCEPTED_STATUS_CODES: hostRules(statusCodes),
+    MAX_RETIRE_RATIO: z.coerce.number().min(0).max(1).default(0.5),
+    MONITOR_INTERVAL_SECONDS: monitorInterval.default(120),
+    MONITOR_INTERVAL_SECONDS_OTHER_ENVS: monitorInterval.default(300),
+    MONITOR_EXPIRY_NOTIFICATION: boolish.default(true),
+    MONITOR_RETRIES: z.coerce.number().int().min(0).default(2),
+    MONITOR_TIMEOUT_SECONDS: positiveInt.default(16),
+  })
 
 export type Config = z.infer<typeof configSchema>
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>
 export type KumaConfig = z.infer<typeof kumaConfigSchema>
+export type LivenessConfig = z.infer<typeof livenessConfigSchema>
 
 const parse = <T extends z.ZodType>(schema: T, env: Env): z.infer<T> => {
   const parsed = schema.safeParse(normalise(env))
@@ -152,6 +163,9 @@ export const toExclusions = (config: DatabaseConfig): Exclusions => ({
 
 export const loadDatabaseConfig = (env: Env = process.env): DatabaseConfig =>
   parse(databaseConfigSchema, env)
+
+export const loadLivenessConfig = (env: Env = process.env): LivenessConfig =>
+  parse(livenessConfigSchema, env)
 
 export const loadKumaConfig = (env: Env = process.env): KumaConfig => parse(kumaConfigSchema, env)
 
