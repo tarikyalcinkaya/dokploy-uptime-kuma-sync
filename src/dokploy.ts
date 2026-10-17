@@ -1,15 +1,15 @@
-import postgres from "postgres";
-import { DB_TIMEOUT_SECONDS } from "./constants.js";
+import postgres from 'postgres'
+import { DB_TIMEOUT_SECONDS } from './constants.js'
 
 export interface DokployDomain {
-  domainId: string;
-  host: string;
-  https: boolean;
-  path: string | null;
-  domainType: string | null;
-  serviceName: string | null;
-  environmentName: string | null;
-  projectName: string | null;
+  domainId: string
+  host: string
+  https: boolean
+  path: string | null
+  domainType: string | null
+  serviceName: string | null
+  environmentName: string | null
+  projectName: string | null
 }
 
 /**
@@ -39,7 +39,7 @@ const DOMAIN_QUERY = `
 		AND d.host IS NOT NULL
 		AND btrim(d.host) <> ''
 	ORDER BY d."createdAt"
-`;
+`
 
 /**
  * `Invalid URL` from the driver says nothing about which of the two likely causes it is, and both
@@ -53,43 +53,40 @@ const connect = (databaseUrl: string): ReturnType<typeof postgres> => {
       idle_timeout: DB_TIMEOUT_SECONDS,
       prepare: false,
       onnotice: () => {},
-    });
+    })
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = error instanceof Error ? error.message : String(error)
     throw new Error(
       `DATABASE_URL could not be parsed (${reason}). Two things usually cause this: ` +
-        "1) quotes — `docker run --env-file` does not strip them, so write the line unquoted; " +
-        "2) special characters in the password, which must be percent-encoded " +
-        "(@ = %40, # = %23, : = %3A, / = %2F, ? = %3F).",
-    );
+        '1) quotes — `docker run --env-file` does not strip them, so write the line unquoted; ' +
+        '2) special characters in the password, which must be percent-encoded ' +
+        '(@ = %40, # = %23, : = %3A, / = %2F, ? = %3F).',
+    )
   }
-};
+}
 
-export const fetchDokployDomains = async (
-  databaseUrl: string,
-): Promise<DokployDomain[]> => {
-  const sql = connect(databaseUrl);
+export const fetchDokployDomains = async (databaseUrl: string): Promise<DokployDomain[]> => {
+  const sql = connect(databaseUrl)
 
   try {
-    const rows = await sql.unsafe<DokployDomain[]>(DOMAIN_QUERY);
-    return [...rows];
+    const rows = await sql.unsafe<DokployDomain[]>(DOMAIN_QUERY)
+    return [...rows]
   } finally {
-    await sql.end({ timeout: DB_TIMEOUT_SECONDS });
+    await sql.end({ timeout: DB_TIMEOUT_SECONDS })
   }
-};
+}
 
 /** Public URL Kuma should probe. Dokploy's `port` column is the container port, not the public one. */
 export const domainToUrl = (domain: DokployDomain): string => {
-  const scheme = domain.https ? "https" : "http";
-  const path = domain.path && domain.path !== "/" ? domain.path : "";
-  const normalisedPath =
-    path.length > 0 && !path.startsWith("/") ? `/${path}` : path;
-  return `${scheme}://${domain.host}${normalisedPath}`;
-};
+  const scheme = domain.https ? 'https' : 'http'
+  const path = domain.path && domain.path !== '/' ? domain.path : ''
+  const normalisedPath = path.length > 0 && !path.startsWith('/') ? `/${path}` : path
+  return `${scheme}://${domain.host}${normalisedPath}`
+}
 
 export const domainToMonitorName = (domain: DokployDomain): string => {
   const context = [domain.projectName, domain.serviceName]
     .filter((part): part is string => Boolean(part))
-    .join("/");
-  return context.length > 0 ? `${context} · ${domain.host}` : domain.host;
-};
+    .join('/')
+  return context.length > 0 ? `${context} · ${domain.host}` : domain.host
+}

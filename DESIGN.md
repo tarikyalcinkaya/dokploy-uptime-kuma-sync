@@ -92,11 +92,11 @@ one level up. The levels that actually distinguish anything are **project and se
 
 The rule worth keeping: show a level only when it discriminates.
 
-| Option | Gives | Cost | Risk |
-| --- | --- | --- | --- |
-| Naming only (current) | alphabetical clustering, search | none | none |
-| Tags (`project:x`) | filtering, coloured badges | moderate — create tags, map name→id, extend the payload | low; tags are metadata |
-| Group monitors (`parent`) | a real tree in the sidebar | high — groups must be reconciled too: create, rename, delete when empty, mark ownership | high |
+| Option                    | Gives                           | Cost                                                                                    | Risk                   |
+| ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------- | ---------------------- |
+| Naming only (current)     | alphabetical clustering, search | none                                                                                    | none                   |
+| Tags (`project:x`)        | filtering, coloured badges      | moderate — create tags, map name→id, extend the payload                                 | low; tags are metadata |
+| Group monitors (`parent`) | a real tree in the sidebar      | high — groups must be reconciled too: create, rename, delete when empty, mark ownership | high                   |
 
 Groups are the roughest part of Kuma today. A group reports fully down when any single child is down
 ([#3937](https://github.com/louislam/uptime-kuma/issues/3937)), so attaching notifications to a group

@@ -61,7 +61,7 @@ Once the plan looks right, set `DRY_RUN=false`.
 
 **This has to run on the Dokploy server.** Dokploy publishes Postgres on the host only when
 `NODE_ENV=development` (`packages/server/src/setup/postgres-setup.ts`), so on a production install the
-database is reachable *only* from inside `dokploy-network`. There is no port to tunnel to from a
+database is reachable _only_ from inside `dokploy-network`. There is no port to tunnel to from a
 laptop.
 
 **Run it as a long-lived container** — `RUN_MODE=loop` with a restart policy, which is what
@@ -74,7 +74,7 @@ docker compose logs -f
 ```
 
 **Do not run it from cron with `docker run --rm`.** Dokploy's Docker Cleanup executes
-`docker image prune --all --force`, and `--all` deletes every image *not referenced by a container* —
+`docker image prune --all --force`, and `--all` deletes every image _not referenced by a container_ —
 not just dangling ones. A one-shot `--rm` container leaves no reference between runs, so the image
 gets deleted and the next cron run dies with `pull access denied`. A long-running container holds a
 reference, so prune cannot touch it.
@@ -124,13 +124,13 @@ would let a forgotten `DRY_RUN=true` look green forever while no monitor is ever
 
 See `.env.example`. Worth calling out:
 
-| Variable | Note |
-| --- | --- |
-| `KUMA_NOTIFICATION_IDS` | **Set this.** Without it monitors are created but nothing alerts you. |
-| `KUMA_PUSH_URL` | **Set this too.** Kuma push monitor that tells you when the sync itself dies. |
-| `KUMA_TOTP_SECRET` | Only if 2FA is on the Kuma account. A cron job cannot type a code, so the base32 secret is needed to generate one. |
-| `DRY_RUN` | Defaults to `true`. |
-| `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise. |
+| Variable                  | Note                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `KUMA_NOTIFICATION_IDS`   | **Set this.** Without it monitors are created but nothing alerts you.                                              |
+| `KUMA_PUSH_URL`           | **Set this too.** Kuma push monitor that tells you when the sync itself dies.                                      |
+| `KUMA_TOTP_SECRET`        | Only if 2FA is on the Kuma account. A cron job cannot type a code, so the base32 secret is needed to generate one. |
+| `DRY_RUN`                 | Defaults to `true`.                                                                                                |
+| `MONITOR_TIMEOUT_SECONDS` | Must stay below `MONITOR_INTERVAL_SECONDS`; Kuma rejects the monitor otherwise.                                    |
 
 ## Troubleshooting
 
@@ -161,6 +161,7 @@ rename), retirement via `pauseMonitor`, `ON_REMOVE=delete`, and the guards actua
 refuses something it surfaces as `Kuma rejected monitor: <msg>`, and that message names the field.
 
 ## Known limitations
+
 - Kuma tags are not used; ownership lives in the description instead, which avoids the separate tag
   API entirely. Tags could be added later if grouping in the Kuma UI becomes useful.
 - No monitor deletion on `ON_REMOVE=pause` means paused monitors accumulate. Prune them by hand, or
