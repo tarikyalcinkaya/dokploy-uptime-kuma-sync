@@ -12,9 +12,11 @@ export interface DokployDomain {
 }
 
 // Dokploy's `port` column is the container port, not the public one, so it never enters the URL.
-export const toMonitorUrl = (domain: DokployDomain): string => {
+// A health path replaces the domain's own path: it is written from the host root.
+export const toMonitorUrl = (domain: DokployDomain, healthPath: string | null = null): string => {
   const scheme = domain.isHttps ? 'https' : 'http'
-  const path = domain.path && domain.path !== '/' ? domain.path : ''
+  const ownPath = domain.path && domain.path !== '/' ? domain.path : ''
+  const path = healthPath ?? ownPath
   const normalisedPath = path.length > 0 && !path.startsWith('/') ? `/${path}` : path
   return `${scheme}://${domain.host}${normalisedPath}`
 }

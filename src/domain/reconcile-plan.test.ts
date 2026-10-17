@@ -13,7 +13,12 @@ const settings: MonitorSettings = {
   notificationIds: [],
 }
 
-const flat: PlanOptions = { settings, isGrouped: false, onRemove: 'pause' }
+const flat: PlanOptions = {
+  settings,
+  rules: { healthPaths: [], acceptedStatusCodes: [] },
+  isGrouped: false,
+  onRemove: 'pause',
+}
 
 const grouped: PlanOptions = { ...flat, isGrouped: true }
 

@@ -15,6 +15,7 @@ const spec = (overrides: Partial<MonitorSpec> = {}): MonitorSpec => ({
   url: 'https://app.example.com',
   description: describeOwnership('dom1'),
   parentId: null,
+  acceptedStatusCodes: ['200-299'],
   settings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
   ...overrides,
 })
@@ -69,6 +70,11 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
     assert.equal(after?.url, 'https://new.example.com')
     assert.equal(after?.name, 'proj/api · new.example.com')
     assert.equal(after?.headers, '{"X-Probe":"1"}')
+  })
+
+  it('stores the accepted status codes', async () => {
+    const id = await create(spec({ acceptedStatusCodes: ['200-299', '401'] }))
+    assert.deepEqual((await raw(id))?.accepted_statuscodes, ['200-299', '401'])
   })
 
   it('pauses and resumes', async () => {

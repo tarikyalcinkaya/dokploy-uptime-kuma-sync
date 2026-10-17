@@ -6,13 +6,26 @@ import {
   type GroupPlan,
   groupKeyOf,
 } from './group-plan.js'
-import type { Monitor, MonitorSettings, MonitorSpec } from './monitor.js'
+import { findHostRule, type HostRule } from './host-rule.js'
+import {
+  DEFAULT_ACCEPTED_STATUS_CODES,
+  type Monitor,
+  type MonitorSettings,
+  type MonitorSpec,
+} from './monitor.js'
 import { describeOwnership, readOwnedDomainId } from './ownership.js'
 
 export type RemovalAction = 'pause' | 'delete'
 
+// Services whose root answers 401/404 by design need another URL or other codes to count as up.
+export interface MonitorRules {
+  healthPaths: HostRule<string>[]
+  acceptedStatusCodes: HostRule<string[]>[]
+}
+
 export interface PlanOptions {
   settings: MonitorSettings
+  rules: MonitorRules
   isGrouped: boolean
   onRemove: RemovalAction
 }
@@ -50,9 +63,12 @@ const planMonitor = (
     domain,
     spec: {
       name: toMonitorName(domain, options.isGrouped),
-      url: toMonitorUrl(domain),
+      url: toMonitorUrl(domain, findHostRule(options.rules.healthPaths, domain.host)),
       description: describeOwnership(domain.domainId),
       parentId,
+      acceptedStatusCodes:
+        findHostRule(options.rules.acceptedStatusCodes, domain.host) ??
+        DEFAULT_ACCEPTED_STATUS_CODES,
       settings: options.settings,
     },
     pendingGroupKey: groupKey && parentId === null ? groupKey : null,

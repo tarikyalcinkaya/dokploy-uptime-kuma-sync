@@ -8,6 +8,7 @@ import type {
 } from '../domain/ports.js'
 import {
   buildPlan,
+  type MonitorRules,
   type PlannedMonitor,
   type ReconcilePlan,
   type RemovalAction,
@@ -21,6 +22,7 @@ export interface ReconcileMonitorsInput {
   maxRetireRatio: number
   isGrouped: boolean
   monitorSettings: MonitorSettings
+  rules: MonitorRules
 }
 
 export interface ReconcileMonitorsDeps {
@@ -104,6 +106,7 @@ export const reconcileMonitors = async (
 
   const plan = buildPlan(domains, monitors, {
     settings: input.monitorSettings,
+    rules: input.rules,
     isGrouped: input.isGrouped,
     onRemove: input.onRemove,
   })

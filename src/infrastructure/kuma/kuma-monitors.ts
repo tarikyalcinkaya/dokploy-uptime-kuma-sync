@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import type { GroupSpec, Monitor, MonitorSpec } from '../../domain/monitor.js'
+import {
+  DEFAULT_ACCEPTED_STATUS_CODES,
+  type GroupSpec,
+  type Monitor,
+  type MonitorSpec,
+} from '../../domain/monitor.js'
 import type { Notification } from '../../domain/notification.js'
 import type {
   IGroupWriter,
@@ -34,7 +39,6 @@ type KumaMonitor = z.infer<typeof kumaMonitorSchema>
 const CREATE_DEFAULTS = {
   type: 'http',
   method: 'GET',
-  accepted_statuscodes: ['200-299'],
   maxredirects: 10,
   expiryNotification: false,
   ignoreTls: false,
@@ -54,6 +58,7 @@ const managedFields = (spec: MonitorSpec): Record<string, unknown> => ({
   url: spec.url,
   description: spec.description,
   parent: spec.parentId,
+  accepted_statuscodes: spec.acceptedStatusCodes,
   interval: spec.settings.intervalSeconds,
   retryInterval: spec.settings.intervalSeconds,
   maxretries: spec.settings.retries,
@@ -64,6 +69,7 @@ const managedFields = (spec: MonitorSpec): Record<string, unknown> => ({
 // Groups never notify: a child going down already alerts, and the group would repeat it.
 const groupFields = (spec: GroupSpec): Record<string, unknown> => ({
   name: spec.name,
+  accepted_statuscodes: DEFAULT_ACCEPTED_STATUS_CODES,
   description: spec.description,
   interval: spec.intervalSeconds,
   retryInterval: spec.intervalSeconds,

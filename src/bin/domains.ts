@@ -12,6 +12,7 @@ const main = async (): Promise<void> => {
   const domains = await listManagedDomains(
     new PostgresDomainSource(config.DATABASE_URL),
     config.GROUP_BY_PROJECT,
+    config.HEALTH_PATHS,
   )
   logger.info({ count: domains.length }, 'domains Dokploy is serving')
   for (const domain of domains) {

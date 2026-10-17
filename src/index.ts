@@ -32,6 +32,7 @@ const toReconcileInput = (config: Config): ReconcileMonitorsInput => ({
   onRemove: config.ON_REMOVE,
   maxRetireRatio: config.MAX_RETIRE_RATIO,
   isGrouped: config.GROUP_BY_PROJECT,
+  rules: { healthPaths: config.HEALTH_PATHS, acceptedStatusCodes: config.ACCEPTED_STATUS_CODES },
   monitorSettings: {
     intervalSeconds: config.MONITOR_INTERVAL_SECONDS,
     retries: config.MONITOR_RETRIES,

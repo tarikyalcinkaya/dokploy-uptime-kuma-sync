@@ -61,4 +61,28 @@ describe('loadConfig', () => {
       /MONITOR_TIMEOUT_SECONDS must be lower/,
     )
   })
+
+  it('reads health paths and accepted codes as host rules', () => {
+    const config = loadConfig({
+      ...minimal,
+      HEALTH_PATHS: 'api.example.com=/health, mta-sts.*=/.well-known/mta-sts.txt',
+      ACCEPTED_STATUS_CODES: 'admin.example.com=200-299|401',
+    })
+    assert.deepEqual(config.HEALTH_PATHS, [
+      { pattern: 'api.example.com', value: '/health' },
+      { pattern: 'mta-sts.*', value: '/.well-known/mta-sts.txt' },
+    ])
+    assert.deepEqual(config.ACCEPTED_STATUS_CODES, [
+      { pattern: 'admin.example.com', value: ['200-299', '401'] },
+    ])
+  })
+
+  it('rejects a malformed host rule', () => {
+    assert.throws(() => loadConfig({ ...minimal, HEALTH_PATHS: 'api.example.com' }), /HEALTH_PATHS/)
+    assert.throws(() => loadConfig({ ...minimal, HEALTH_PATHS: 'api=health' }), /HEALTH_PATHS/)
+    assert.throws(
+      () => loadConfig({ ...minimal, ACCEPTED_STATUS_CODES: 'api=ok' }),
+      /ACCEPTED_STATUS_CODES/,
+    )
+  })
 })

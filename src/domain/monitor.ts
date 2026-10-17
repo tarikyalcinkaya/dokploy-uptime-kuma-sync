@@ -15,11 +15,14 @@ export interface MonitorSettings {
   notificationIds: string[]
 }
 
+export const DEFAULT_ACCEPTED_STATUS_CODES = ['200-299']
+
 export interface MonitorSpec {
   name: string
   url: string
   description: string
   parentId: number | null
+  acceptedStatusCodes: string[]
   settings: MonitorSettings
 }
 
