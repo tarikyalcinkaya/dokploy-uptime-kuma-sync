@@ -16,7 +16,13 @@ const spec = (overrides: Partial<MonitorSpec> = {}): MonitorSpec => ({
   description: describeOwnership('dom1'),
   parentId: null,
   acceptedStatusCodes: ['200-299'],
-  settings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
+  settings: {
+    intervalSeconds: 60,
+    retries: 2,
+    timeoutSeconds: 16,
+    notificationIds: [],
+    notifiesCertificateExpiry: true,
+  },
   ...overrides,
 })
 
@@ -49,7 +55,13 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
         isActive: true,
         description: describeOwnership('dom1'),
         acceptedStatusCodes: ['200-299'],
-        settings: { intervalSeconds: 60, retries: 2, timeoutSeconds: 16, notificationIds: [] },
+        settings: {
+          intervalSeconds: 60,
+          retries: 2,
+          timeoutSeconds: 16,
+          notificationIds: [],
+          notifiesCertificateExpiry: true,
+        },
       },
     ])
   })
@@ -72,6 +84,19 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
     assert.equal(after?.url, 'https://new.example.com')
     assert.equal(after?.name, 'proj/api · new.example.com')
     assert.equal(after?.headers, '{"X-Probe":"1"}')
+  })
+
+  it('turns certificate expiry alerts on for monitors and off for groups', async () => {
+    const id = await create()
+    const groupId = await withKuma((session) =>
+      new KumaGroupWriter(session).createGroup({
+        name: 'shop',
+        description: describeGroupOwnership('p1'),
+        intervalSeconds: 60,
+      }),
+    )
+    assert.equal((await raw(id))?.expiryNotification, true)
+    assert.equal((await raw(groupId))?.expiryNotification, false)
   })
 
   it('stores the accepted status codes', async () => {
@@ -102,6 +127,7 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
           retries: 2,
           timeoutSeconds: 16,
           notificationIds: [String(notificationId)],
+          notifiesCertificateExpiry: true,
         },
       }),
     )

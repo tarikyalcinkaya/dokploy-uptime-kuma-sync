@@ -25,6 +25,8 @@ export interface MonitorRules {
 
 export interface PlanOptions {
   settings: MonitorSettings
+  // Environments other than a project's default one are usually staging; they need less attention.
+  otherEnvironmentIntervalSeconds: number
   rules: MonitorRules
   isGrouped: boolean
   onRemove: RemovalAction
@@ -69,7 +71,10 @@ const planMonitor = (
       acceptedStatusCodes:
         findHostRule(options.rules.acceptedStatusCodes, domain.host) ??
         DEFAULT_ACCEPTED_STATUS_CODES,
-      settings: options.settings,
+      settings:
+        domain.isDefaultEnvironment === false
+          ? { ...options.settings, intervalSeconds: options.otherEnvironmentIntervalSeconds }
+          : options.settings,
     },
     pendingGroupKey: groupKey && parentId === null ? groupKey : null,
   }
@@ -82,6 +87,7 @@ const sameSettings = (current: MonitorSettings, wanted: MonitorSettings): boolea
   current.intervalSeconds === wanted.intervalSeconds &&
   current.retries === wanted.retries &&
   current.timeoutSeconds === wanted.timeoutSeconds &&
+  current.notifiesCertificateExpiry === wanted.notifiesCertificateExpiry &&
   sameSet(current.notificationIds, wanted.notificationIds)
 
 const needsUpdate = (monitor: Monitor, { spec, pendingGroupKey }: PlannedMonitor): boolean =>

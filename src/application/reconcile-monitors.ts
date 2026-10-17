@@ -23,6 +23,7 @@ export interface ReconcileMonitorsInput {
   maxRetireRatio: number
   isGrouped: boolean
   monitorSettings: MonitorSettings
+  otherEnvironmentIntervalSeconds: number
   rules: MonitorRules
   exclusions: Exclusions
 }
@@ -112,6 +113,7 @@ export const reconcileMonitors = async (
 
   const plan = buildPlan(domains, monitors, {
     settings: input.monitorSettings,
+    otherEnvironmentIntervalSeconds: input.otherEnvironmentIntervalSeconds,
     rules: input.rules,
     isGrouped: input.isGrouped,
     onRemove: input.onRemove,

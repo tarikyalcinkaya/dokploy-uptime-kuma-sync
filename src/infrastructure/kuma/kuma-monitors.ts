@@ -26,6 +26,7 @@ const kumaMonitorSchema = z.looseObject({
   interval: z.number(),
   maxretries: z.number(),
   timeout: z.number(),
+  expiryNotification: z.boolean(),
   accepted_statuscodes: z.array(z.string()),
   notificationIDList: z.record(z.string(), z.boolean()).optional(),
 })
@@ -45,7 +46,6 @@ const CREATE_DEFAULTS = {
   type: 'http',
   method: 'GET',
   maxredirects: 10,
-  expiryNotification: false,
   ignoreTls: false,
   upsideDown: false,
   resendInterval: 0,
@@ -68,6 +68,7 @@ const managedFields = (spec: MonitorSpec): Record<string, unknown> => ({
   retryInterval: spec.settings.intervalSeconds,
   maxretries: spec.settings.retries,
   timeout: spec.settings.timeoutSeconds,
+  expiryNotification: spec.settings.notifiesCertificateExpiry,
   notificationIDList: Object.fromEntries(spec.settings.notificationIds.map((id) => [id, true])),
 })
 
@@ -78,6 +79,7 @@ const groupFields = (spec: GroupSpec): Record<string, unknown> => ({
   description: spec.description,
   interval: spec.intervalSeconds,
   retryInterval: spec.intervalSeconds,
+  expiryNotification: false,
   notificationIDList: {},
 })
 
@@ -133,6 +135,7 @@ export class KumaMonitorReader implements IMonitorReader {
         intervalSeconds: raw.interval,
         retries: raw.maxretries,
         timeoutSeconds: raw.timeout,
+        notifiesCertificateExpiry: raw.expiryNotification,
         notificationIds: Object.entries(raw.notificationIDList ?? {})
           .filter(([, isOn]) => isOn)
           .map(([id]) => id),

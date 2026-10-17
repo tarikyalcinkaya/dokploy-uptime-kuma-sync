@@ -32,12 +32,14 @@ const toReconcileInput = (config: Config): ReconcileMonitorsInput => ({
   onRemove: config.ON_REMOVE,
   maxRetireRatio: config.MAX_RETIRE_RATIO,
   isGrouped: config.GROUP_BY_PROJECT,
+  otherEnvironmentIntervalSeconds: config.MONITOR_INTERVAL_SECONDS_OTHER_ENVS,
   rules: { healthPaths: config.HEALTH_PATHS, acceptedStatusCodes: config.ACCEPTED_STATUS_CODES },
   exclusions: toExclusions(config),
   monitorSettings: {
     intervalSeconds: config.MONITOR_INTERVAL_SECONDS,
     retries: config.MONITOR_RETRIES,
     timeoutSeconds: config.MONITOR_TIMEOUT_SECONDS,
+    notifiesCertificateExpiry: config.MONITOR_EXPIRY_NOTIFICATION,
     notificationIds: config.KUMA_NOTIFICATION_IDS,
   },
 })
