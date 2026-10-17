@@ -36,6 +36,7 @@ const toReconcileInput = (config: Config): ReconcileMonitorsInput => ({
   otherEnvironmentIntervalSeconds: config.MONITOR_INTERVAL_SECONDS_OTHER_ENVS,
   rules: { healthPaths: config.HEALTH_PATHS, acceptedStatusCodes: config.ACCEPTED_STATUS_CODES },
   exclusions: toExclusions(config),
+  pausedRetentionDays: config.PAUSED_DELETE_AFTER_DAYS,
   monitorSettings: {
     intervalSeconds: config.MONITOR_INTERVAL_SECONDS,
     retries: config.MONITOR_RETRIES,

@@ -158,6 +158,10 @@ export class KumaMonitorWriter implements IMonitorWriter {
     return editMonitor(this.#session, id, managedFields(spec))
   }
 
+  describeMonitor(id: number, description: string): Promise<void> {
+    return editMonitor(this.#session, id, { description })
+  }
+
   async pauseMonitor(id: number): Promise<void> {
     await this.#session.expectOk('pauseMonitor', id)
   }

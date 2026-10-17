@@ -26,6 +26,7 @@ export interface ReconcileMonitorsInput {
   otherEnvironmentIntervalSeconds: number
   rules: MonitorRules
   exclusions: Exclusions
+  pausedRetentionDays: number
 }
 
 export interface ReconcileMonitorsDeps {
@@ -81,6 +82,11 @@ const applyPlan = async (
     logger.info({ host: domain.host, monitorId: monitor.id }, 'monitor resumed')
   }
 
+  // The pause time is written first: a pause without it would never expire.
+  for (const { monitor, description } of plan.stamp) {
+    await monitors.describeMonitor(monitor.id, description)
+  }
+
   for (const monitor of plan.retire) {
     if (onRemove === 'delete') {
       await monitors.deleteMonitor(monitor.id)
@@ -89,6 +95,11 @@ const applyPlan = async (
       await monitors.pauseMonitor(monitor.id)
       logger.info({ monitorId: monitor.id, name: monitor.name }, 'monitor paused')
     }
+  }
+
+  for (const monitor of plan.expire) {
+    await monitors.deleteMonitor(monitor.id)
+    logger.info({ monitorId: monitor.id, name: monitor.name }, 'expired paused monitor deleted')
   }
 
   for (const group of plan.groups.retire) {
@@ -115,6 +126,8 @@ export const reconcileMonitors = async (
     settings: input.monitorSettings,
     otherEnvironmentIntervalSeconds: input.otherEnvironmentIntervalSeconds,
     rules: input.rules,
+    pausedRetentionDays: input.pausedRetentionDays,
+    now: new Date(),
     isGrouped: input.isGrouped,
     onRemove: input.onRemove,
   })

@@ -129,6 +129,7 @@ const configSchema = databaseConfigSchema
     ),
     DRY_RUN: boolish.default(true),
     ON_REMOVE: z.enum(['pause', 'delete']).default('pause'),
+    PAUSED_DELETE_AFTER_DAYS: z.coerce.number().int().min(0).default(30),
     ACCEPTED_STATUS_CODES: hostRules(statusCodes),
     MAX_RETIRE_RATIO: z.coerce.number().min(0).max(1).default(0.5),
     MONITOR_INTERVAL_SECONDS: monitorInterval.default(120),

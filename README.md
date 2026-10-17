@@ -114,6 +114,9 @@ Both refuse the whole run rather than doing partial damage:
   A single removal is always allowed, so normal deletions are never blocked.
 
 `ON_REMOVE=pause` (default) keeps the monitor and its history. `delete` is available but permanent.
+A paused monitor is deleted once it has been paused for `PAUSED_DELETE_AFTER_DAYS` (default 30, `0` =
+never); Kuma does not record when a monitor was paused, so the time is written into its description as
+`dokploy:pausedAt=…` and cleared if the domain comes back.
 
 ### Watching the watcher
 
@@ -196,5 +199,3 @@ monitor creation with notifications and the push heartbeat.
 
 - Kuma tags are not used; ownership lives in the description instead, which avoids the separate tag
   API entirely. Monitors are organised with one group per Dokploy project (`GROUP_BY_PROJECT`).
-- No monitor deletion on `ON_REMOVE=pause` means paused monitors accumulate. Prune them by hand, or
-  switch to `delete` once you trust the guards.

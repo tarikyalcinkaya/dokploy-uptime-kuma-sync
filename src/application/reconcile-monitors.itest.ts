@@ -24,6 +24,7 @@ const input: ReconcileMonitorsInput = {
   otherEnvironmentIntervalSeconds: 300,
   rules: { healthPaths: [], acceptedStatusCodes: [] },
   exclusions: { hosts: [], projects: [], services: [], middlewares: [] },
+  pausedRetentionDays: 30,
   monitorSettings: {
     intervalSeconds: 60,
     retries: 2,
@@ -83,8 +84,12 @@ describe('reconcileMonitors end to end', () => {
     const paused = await listMonitors()
     assert.equal(paused.filter((monitor) => !monitor.isActive).length, 1)
 
+    const [pausedC] = paused.filter((monitor) => !monitor.isActive)
+    assert.match(pausedC?.description ?? '', /^dokploy:pausedAt=/m)
+
     await seedDokploy([service(['a', 'b', 'c'])])
-    assert.deepEqual(counts(await cycle()), { create: 0, update: 0, revive: 1, retire: 0 })
+    assert.deepEqual(counts(await cycle()), { create: 0, update: 1, revive: 1, retire: 0 })
+    assert.deepEqual(counts(await cycle()), { create: 0, update: 0, revive: 0, retire: 0 })
   })
 
   it('builds one group per project and puts each domain under its own', async () => {

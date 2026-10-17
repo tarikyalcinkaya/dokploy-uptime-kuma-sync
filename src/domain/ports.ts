@@ -13,6 +13,7 @@ export interface IMonitorReader {
 export interface IMonitorWriter {
   createMonitor(spec: MonitorSpec): Promise<number>
   updateMonitor(id: number, spec: MonitorSpec): Promise<void>
+  describeMonitor(id: number, description: string): Promise<void>
   pauseMonitor(id: number): Promise<void>
   resumeMonitor(id: number): Promise<void>
   deleteMonitor(id: number): Promise<void>
