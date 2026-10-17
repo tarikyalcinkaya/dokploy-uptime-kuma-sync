@@ -136,10 +136,48 @@ describe('buildPlan settings propagation', () => {
   })
 })
 
+describe('buildPlan duplicate endpoints', () => {
+  it('opens one monitor for several domains on the same host and path, preferring https', () => {
+    const plan = buildPlan(
+      [
+        domain({ domainId: 'http', isHttps: false }),
+        domain({ domainId: 'https' }),
+        domain({ domainId: 'again', host: 'APP.example.com' }),
+        domain({ domainId: 'sub', path: '/api' }),
+      ],
+      [],
+      flat,
+    )
+    assert.deepEqual(
+      plan.create.map(({ domain: { domainId } }) => domainId),
+      ['https', 'sub'],
+    )
+  })
+
+  it('retires the monitor a duplicate already had', () => {
+    const duplicate = monitor({ id: 2, description: `x\n${MANAGED_MARKER_PREFIX}dom2` })
+    const plan = buildPlan([domain(), domain({ domainId: 'dom2' })], [monitor(), duplicate], flat)
+    assert.deepEqual(
+      plan.retire.map(({ id }) => id),
+      [2],
+    )
+  })
+
+  it('counts two paths that share a health path as one endpoint', () => {
+    const rules = { healthPaths: [{ pattern: 'app.*', value: '/health' }], acceptedStatusCodes: [] }
+    const plan = buildPlan([domain(), domain({ domainId: 'dom2', path: '/api' })], [], {
+      ...flat,
+      rules,
+    })
+    assert.equal(plan.create.length, 1)
+  })
+})
+
 describe('buildPlan intervals', () => {
   it('checks the default environment at the main interval and the others less often', () => {
     const staging = domain({
       domainId: 'dom2',
+      host: 'staging.example.com',
       environmentName: 'staging',
       isDefaultEnvironment: false,
     })
