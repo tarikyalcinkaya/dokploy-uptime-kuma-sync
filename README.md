@@ -183,7 +183,7 @@ Update:
 ```bash
 git fetch && git checkout --detach <sha>   # the commit whose docker-compose.yml pins the new digest
 docker compose pull
-docker compose run --rm -e DRY_RUN=true dokploy-uptime-kuma-sync   # read the plan
+docker compose run --rm -e DRY_RUN=true -e RUN_MODE=once dokploy-uptime-kuma-sync   # read the plan
 docker compose up -d
 docker compose ps
 ```
