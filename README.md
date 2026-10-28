@@ -49,7 +49,7 @@ GRANT SELECT ON domain, application, compose, environment, project TO kuma_sync;
 Then walk up in three steps, each one safe:
 
 ```bash
-pnpm domains   # DATABASE_URL only — what would be managed? No Kuma contact at all.
+pnpm domains   # DATABASE_URL only — what would be managed? No Kuma contact at all. `--all` adds the rows reconcile skips.
 pnpm inspect   # + Kuma credentials — login works? Prints notification ids. Read-only.
 pnpm dev       # full reconcile, DRY_RUN=true by default — prints the plan, changes nothing.
 ```
