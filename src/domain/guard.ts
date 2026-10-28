@@ -1,4 +1,4 @@
-import type { ReconcilePlan } from './reconcile-plan.js'
+import type { ReconcilePlan } from './plan-types.js'
 
 const MIN_RETIRE_ALLOWANCE = 1
 

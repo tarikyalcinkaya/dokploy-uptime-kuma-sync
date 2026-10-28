@@ -37,7 +37,10 @@ describe('inspectKuma', () => {
     )
 
     assert.equal(inventory.monitorCount, 4)
-    assert.deepEqual(inventory.managedMonitors, [owned, group])
+    assert.deepEqual(
+      inventory.managedMonitors,
+      [owned, group].map(({ id, name, url, isActive }) => ({ id, name, url, isActive })),
+    )
     assert.deepEqual(inventory.notifications, notifications)
   })
 

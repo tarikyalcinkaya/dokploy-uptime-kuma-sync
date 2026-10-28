@@ -8,6 +8,7 @@ import {
 import type { Notification } from '../../domain/notification.js'
 import type {
   IGroupWriter,
+  IMonitorLifecycle,
   IMonitorReader,
   IMonitorWriter,
   INotificationSource,
@@ -160,6 +161,14 @@ export class KumaMonitorWriter implements IMonitorWriter {
 
   describeMonitor(id: number, description: string): Promise<void> {
     return editMonitor(this.#session, id, { description })
+  }
+}
+
+export class KumaMonitorLifecycle implements IMonitorLifecycle {
+  readonly #session: KumaSession
+
+  constructor(session: KumaSession) {
+    this.#session = session
   }
 
   async pauseMonitor(id: number): Promise<void> {

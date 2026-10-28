@@ -1,5 +1,5 @@
 import { type DokployDomain, toGroupName } from './dokploy-domain.js'
-import type { GroupSpec, Monitor } from './monitor.js'
+import type { GroupSpec, Monitor, MonitorSpec } from './monitor.js'
 import { describeGroupOwnership, readOwnedProjectId } from './ownership.js'
 
 export interface PlannedGroup {
@@ -76,3 +76,35 @@ export const findRetiredGroups = (
   [...groups]
     .filter(([key, group]) => !wantedKeys.has(key) && !survivingChildParents.has(group.id))
     .map(([, group]) => group)
+
+interface ChangesToChildren {
+  create: { spec: MonitorSpec }[]
+  update: { monitor: Monitor; spec: MonitorSpec }[]
+  retire: Monitor[]
+  expire: Monitor[]
+}
+
+// A group survives while anything stays under it that this run neither deletes nor moves.
+export const survivingChildParents = (
+  monitors: Monitor[],
+  changes: ChangesToChildren,
+  retiredAreDeleted: boolean,
+): Set<number> => {
+  const leaving = new Set<number>([
+    ...changes.update.map(({ monitor }) => monitor.id),
+    ...(retiredAreDeleted ? changes.retire.map((monitor) => monitor.id) : []),
+    ...changes.expire.map((monitor) => monitor.id),
+  ])
+  const parents = new Set<number>()
+  for (const monitor of monitors) {
+    if (monitor.parentId !== null && !leaving.has(monitor.id)) {
+      parents.add(monitor.parentId)
+    }
+  }
+  for (const { spec } of [...changes.update, ...changes.create]) {
+    if (spec.parentId !== null) {
+      parents.add(spec.parentId)
+    }
+  }
+  return parents
+}

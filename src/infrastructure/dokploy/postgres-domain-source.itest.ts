@@ -1,7 +1,17 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { databaseUrl, seedDokploy, withDatabase } from '../../testing/fixtures.js'
+import { closeDokploy, connectDokploy } from './postgres-client.js'
 import { PostgresDomainSource } from './postgres-domain-source.js'
+
+const listDomains = async (statementTimeoutMs?: number) => {
+  const sql = connectDokploy(databaseUrl(), statementTimeoutMs)
+  try {
+    return await new PostgresDomainSource(sql).listDomains()
+  } finally {
+    await closeDokploy(sql)
+  }
+}
 
 describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
   it('reads application and compose domains with their project and service', async () => {
@@ -32,7 +42,7 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
       },
     ])
 
-    const domains = await new PostgresDomainSource(databaseUrl()).listDomains()
+    const domains = await listDomains()
 
     assert.deepEqual(domains, [
       {
@@ -88,7 +98,7 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
       service('done-compose', 'done', 'compose'),
     ])
 
-    const domains = await new PostgresDomainSource(databaseUrl()).listDomains()
+    const domains = await listDomains()
     assert.deepEqual(
       Object.fromEntries(domains.map((domain) => [domain.domainId, domain.isStopped])),
       {
@@ -117,7 +127,7 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
       },
     ])
 
-    const domains = await new PostgresDomainSource(databaseUrl()).listDomains()
+    const domains = await listDomains()
     assert.deepEqual(
       domains.map((domain) => domain.domainId),
       ['keep'],
@@ -128,10 +138,7 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
     await withDatabase((sql) =>
       sql.begin(async (transaction) => {
         await transaction`LOCK TABLE domain IN ACCESS EXCLUSIVE MODE`
-        await assert.rejects(
-          new PostgresDomainSource(databaseUrl(), 500).listDomains(),
-          /statement timeout/,
-        )
+        await assert.rejects(listDomains(500), /statement timeout/)
       }),
     )
   })

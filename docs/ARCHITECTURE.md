@@ -9,7 +9,8 @@ src/
   application/     use cases; reach the world only through domain ports
   infrastructure/  adapters: Postgres, Kuma Socket.IO, heartbeat, config, logger
   shared/          tiny kernel (error formatting)
-  index.ts, bin/   composition roots — the only place adapters are constructed
+  index.ts, bin/   composition roots — the only place adapters and the Postgres client are constructed;
+                   they consume application DTOs, never domain types
 ```
 
 Dependencies point inwards only. `pnpm arch` (dependency-cruiser) fails the build otherwise.
@@ -20,7 +21,9 @@ Dependencies point inwards only. `pnpm arch` (dependency-cruiser) fails the buil
 | --------------------- | ------------------------ | ----------------------------------------- |
 | `IDomainSource`       | `PostgresDomainSource`   | domains Dokploy currently serves          |
 | `IMonitorReader`      | `KumaMonitorReader`      | monitors Kuma pushes after login          |
-| `IMonitorWriter`      | `KumaMonitorWriter`      | create, update, pause, resume, delete     |
+| `IMonitorWriter`      | `KumaMonitorWriter`      | create, update, describe                  |
+| `IMonitorLifecycle`   | `KumaMonitorLifecycle`   | pause, resume, delete                     |
+| `IHeartbeatSink`      | `PushHeartbeatSink`      | push-monitor ping after each cycle        |
 | `IGroupWriter`        | `KumaGroupWriter`        | project groups: create, rename, delete    |
 | `INotificationSource` | `KumaNotificationSource` | notification ids, for `pnpm inspect` only |
 
@@ -29,7 +32,8 @@ so a fresh session is what keeps the view current.
 
 ## Use cases
 
-- `reconcileMonitors` — plan, guard, then dry-run report or apply.
+- `reconcileMonitors` — plan, guard, then dry-run report or apply; returns a `ReconcileReportDto`.
+- `runMonitoredCycle` — wraps one cycle with the heartbeat: no ping on a dry run, `down` on failure.
 - `listManagedDomains` — what `pnpm domains` prints.
 - `inspectKuma` — what `pnpm inspect` prints.
 
