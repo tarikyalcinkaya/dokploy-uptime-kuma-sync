@@ -47,6 +47,7 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
         serviceName: 'web',
         isDefaultEnvironment: true,
         middlewares: [],
+        isStopped: false,
       },
       {
         domainId: 'd2',
@@ -60,8 +61,44 @@ describe('PostgresDomainSource against a Dokploy-shaped schema', () => {
         serviceName: 'api',
         isDefaultEnvironment: true,
         middlewares: ['vpn-only@file'],
+        isStopped: false,
       },
     ])
+  })
+
+  it('flags only idle services as stopped and keeps error watched', async () => {
+    const service = (
+      id: string,
+      status: 'idle' | 'done' | 'error',
+      kind: 'application' | 'compose',
+    ) => ({
+      projectId: 'p1',
+      projectName: 'shop',
+      kind,
+      serviceId: id,
+      serviceName: id,
+      status,
+      domains: [{ domainId: `d-${id}`, host: `${id}.example.com` }],
+    })
+    await seedDokploy([
+      service('idle-app', 'idle', 'application'),
+      service('done-app', 'done', 'application'),
+      service('error-app', 'error', 'application'),
+      service('idle-compose', 'idle', 'compose'),
+      service('done-compose', 'done', 'compose'),
+    ])
+
+    const domains = await new PostgresDomainSource(databaseUrl()).listDomains()
+    assert.deepEqual(
+      Object.fromEntries(domains.map((domain) => [domain.domainId, domain.isStopped])),
+      {
+        'd-idle-app': true,
+        'd-done-app': false,
+        'd-error-app': false,
+        'd-idle-compose': true,
+        'd-done-compose': false,
+      },
+    )
   })
 
   it('leaves out preview deployments and blank hosts', async () => {
