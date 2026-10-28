@@ -10,5 +10,5 @@ run = [
   "pnpm typecheck",
   "pnpm lint",
   "pnpm arch",
-  "pnpm test",
+  "pnpm coverage",
 ]

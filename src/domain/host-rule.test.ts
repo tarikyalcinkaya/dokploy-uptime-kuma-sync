@@ -18,10 +18,9 @@ describe('matchesPattern', () => {
     assert.equal(matchesPattern('(a)+', '(a)+'), true)
   })
 
-  it('stays fast on a pattern with many stars against a long host', () => {
-    const startedAt = performance.now()
-    assert.equal(matchesPattern('*a*a*a*a*a*a*b', 'a'.repeat(253)), false)
-    assert.ok(performance.now() - startedAt < 50)
+  it('finishes on a pattern with many stars against a long host', { timeout: 5000 }, () => {
+    assert.equal(matchesPattern('*a*a*a*a*a*a*b', 'a'.repeat(5000)), false)
+    assert.equal(matchesPattern('*a*a*a*a*a*a*b', `${'a'.repeat(5000)}b`), true)
   })
 })
 
