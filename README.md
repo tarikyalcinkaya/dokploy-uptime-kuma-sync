@@ -49,7 +49,7 @@ GRANT SELECT ON domain, application, compose, environment, project TO kuma_sync;
 Then walk up in three steps, each one safe:
 
 ```bash
-pnpm domains   # DATABASE_URL only — what would be managed? No Kuma contact at all.
+pnpm domains   # DATABASE_URL only — what would be managed? No Kuma contact at all. `--all` adds the rows reconcile skips.
 pnpm inspect   # + Kuma credentials — login works? Prints notification ids. Read-only.
 pnpm dev       # full reconcile, DRY_RUN=true by default — prints the plan, changes nothing.
 ```
@@ -70,7 +70,8 @@ laptop.
 `docker-compose.yml` sets up:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 docker compose logs -f
 ```
@@ -122,8 +123,10 @@ never); Kuma does not record when a monitor was paused, so the time is written i
 
 The image has a Docker `HEALTHCHECK`: in loop mode the worker touches `ALIVE_FILE`
 (`/tmp/kuma-sync.alive`) after every cycle, and the container turns unhealthy once it has been quiet
-for two intervals plus five minutes — a hung worker, not a failed cycle. Swarm, which Dokploy
-applications run on, replaces an unhealthy task; plain `docker compose` only shows the status.
+for two intervals plus five minutes — a hung worker, not a failed cycle. The healthcheck only marks
+the container unhealthy: `restart: unless-stopped` restarts a container that exits, not one that is
+unhealthy, so nothing restarts a hung worker for you. Plain `docker compose` shows the status, and
+`KUMA_PUSH_URL` below is what actually alerts you.
 
 If the sync silently stops — crashed container, deleted image, rotated password — new domains stop getting
 monitors and nothing tells you. It becomes the blind spot in your own alerting.
@@ -169,6 +172,32 @@ See `.env.example`. Worth calling out:
 | `EXCLUDE_HOSTS`            | Host patterns to skip, e.g. `autodiscover.*`. Also `EXCLUDE_PROJECTS` and `EXCLUDE_SERVICES` by name.                        |
 | `MONITOR_INTERVAL_SECONDS` | 120 for a project's default environment; `MONITOR_INTERVAL_SECONDS_OTHER_ENVS` (300) for the rest.                           |
 | `MONITOR_TIMEOUT_SECONDS`  | Must stay below both intervals; Kuma rejects the monitor otherwise.                                                          |
+
+## Deploying to the server
+
+CI builds the image on every push to `main` and publishes it to
+`ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync` (tags `:<short-sha>`, `:main`, `:vX.Y.Z`). The server
+never builds. The pin is not in the repo: `docker-compose.yml` reads `KUMA_SYNC_TAG` from the server's
+`.env` (`vX.Y.Z@sha256:<index digest>`), so a moved tag cannot change what runs and a release needs no
+commit to deploy. Compose refuses to start without it.
+
+First time: add `KUMA_SYNC_TAG=v0.2.0@sha256:79e766bba889f5269d3e0687b65f2e6ad89e5f217cdc3a402983ccd9366ffc9a`
+to `.env`.
+
+Update:
+
+1. Get the new release's digest from the GitHub Release notes, the `docker` job summary, or
+   `docker buildx imagetools inspect ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync:vX.Y.Z`.
+2. Set `KUMA_SYNC_TAG=vX.Y.Z@sha256:<digest>` in `.env`.
+
+```bash
+docker compose pull
+docker compose run --rm -e DRY_RUN=true -e RUN_MODE=once dokploy-uptime-kuma-sync   # read the plan
+docker compose up -d
+docker compose ps
+```
+
+Roll back: set `KUMA_SYNC_TAG` back to the previous value, then `docker compose pull && docker compose up -d`.
 
 ## Upgrading an existing install
 

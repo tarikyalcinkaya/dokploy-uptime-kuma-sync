@@ -5,6 +5,7 @@ import { describeGroupOwnership, describeOwnership } from '../../domain/ownershi
 import { addWebhookNotification, resetKuma, withKuma } from '../../testing/fixtures.js'
 import {
   KumaGroupWriter,
+  KumaMonitorLifecycle,
   KumaMonitorReader,
   KumaMonitorWriter,
   KumaNotificationSource,
@@ -106,15 +107,15 @@ describe('Kuma monitor adapters against a real Kuma 2.x', () => {
 
   it('pauses and resumes', async () => {
     const id = await create()
-    await withKuma((session) => new KumaMonitorWriter(session).pauseMonitor(id))
+    await withKuma((session) => new KumaMonitorLifecycle(session).pauseMonitor(id))
     assert.equal((await list())[0]?.isActive, false)
-    await withKuma((session) => new KumaMonitorWriter(session).resumeMonitor(id))
+    await withKuma((session) => new KumaMonitorLifecycle(session).resumeMonitor(id))
     assert.equal((await list())[0]?.isActive, true)
   })
 
   it('deletes', async () => {
     const id = await create()
-    await withKuma((session) => new KumaMonitorWriter(session).deleteMonitor(id))
+    await withKuma((session) => new KumaMonitorLifecycle(session).deleteMonitor(id))
     assert.deepEqual(await list(), [])
   })
 

@@ -91,8 +91,8 @@ export class KumaSession {
     try {
       return (await socket.timeout(CALL_TIMEOUT_MS).emitWithAck(event, ...args)) as
         KumaAck | undefined
-    } catch {
-      throw new Error(`Kuma ${event} timed out after ${CALL_TIMEOUT_MS}ms`)
+    } catch (error) {
+      throw new Error(`Kuma ${event} timed out after ${CALL_TIMEOUT_MS}ms`, { cause: error })
     }
   }
 

@@ -1,17 +1,12 @@
-import postgres from 'postgres'
 import { z } from 'zod'
 import type { DokployDomain } from '../../domain/dokploy-domain.js'
 import type { IDomainSource } from '../../domain/ports.js'
-import { errorMessage } from '../../shared/errors.js'
-import { DB_STATEMENT_TIMEOUT_MS, DB_TIMEOUT_SECONDS } from '../timeouts.js'
-
-// `to_jsonb` reads columns that older Dokploy releases lack as NULL instead of failing the query.
-// Preview domains come and go with pull requests and would fill Kuma with monitors that die within days.
-type Sql = ReturnType<typeof postgres>
+import type { Sql } from './postgres-client.js'
 
 // Dokploy keeps `idle` for a service that was stopped or never deployed; `error` is a real failure and stays watched.
 const STOPPED_STATUS = 'idle'
 
+// `to_jsonb` reads columns that older Dokploy releases lack as NULL instead of failing the query.
 const queryDomains = (sql: Sql) => sql`
 	SELECT
 		d."domainId"      AS "domainId",
@@ -67,50 +62,17 @@ const toDomain = ({
 })
 
 export class PostgresDomainSource implements IDomainSource {
-  readonly #databaseUrl: string
-  readonly #statementTimeoutMs: number
+  readonly #sql: Sql
 
-  constructor(databaseUrl: string, statementTimeoutMs = DB_STATEMENT_TIMEOUT_MS) {
-    this.#databaseUrl = databaseUrl
-    this.#statementTimeoutMs = statementTimeoutMs
+  constructor(sql: Sql) {
+    this.#sql = sql
   }
 
   async listDomains(): Promise<DokployDomain[]> {
-    const sql = this.#connect()
-    try {
-      const rows = await queryDomains(sql)
-      return z
-        .array(domainRowSchema)
-        .parse([...rows])
-        .map(toDomain)
-    } finally {
-      await sql.end({ timeout: DB_TIMEOUT_SECONDS })
-    }
-  }
-
-  // The driver's bare `Invalid URL` hides which of the two usual causes it is, so name both.
-  #connect(): Sql {
-    try {
-      return postgres(this.#databaseUrl, {
-        max: 1,
-        connect_timeout: DB_TIMEOUT_SECONDS,
-        idle_timeout: DB_TIMEOUT_SECONDS,
-        prepare: false,
-        // Bounds a query stuck behind a lock; in loop mode it would otherwise hang the worker for good.
-        connection: {
-          statement_timeout: this.#statementTimeoutMs,
-          default_transaction_read_only: true,
-        },
-        onnotice: () => undefined,
-      })
-    } catch (error) {
-      throw new Error(
-        `DATABASE_URL could not be parsed (${errorMessage(error)}). Two things usually cause this: ` +
-          '1) quotes — `docker run --env-file` does not strip them, so write the line unquoted; ' +
-          '2) special characters in the password, which must be percent-encoded ' +
-          '(@ = %40, # = %23, : = %3A, / = %2F, ? = %3F).',
-        { cause: error },
-      )
-    }
+    const rows = await queryDomains(this.#sql)
+    return z
+      .array(domainRowSchema)
+      .parse([...rows])
+      .map(toDomain)
   }
 }

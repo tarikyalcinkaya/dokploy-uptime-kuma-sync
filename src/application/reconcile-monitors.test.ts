@@ -7,6 +7,7 @@ import type {
   IDomainSource,
   IGroupWriter,
   IMonitorReader,
+  IMonitorLifecycle,
   IMonitorWriter,
 } from '../domain/ports.js'
 import type { ILogger } from './logger.js'
@@ -14,7 +15,7 @@ import { type ReconcileMonitorsInput, reconcileMonitors } from './reconcile-moni
 
 type Call = [method: string, ...args: unknown[]]
 
-class FakeKuma implements IMonitorReader, IMonitorWriter, IGroupWriter {
+class FakeKuma implements IMonitorReader, IMonitorWriter, IMonitorLifecycle, IGroupWriter {
   readonly calls: Call[] = []
   readonly parents = new Map<string, number | null>()
   readonly specs: MonitorSpec[] = []
@@ -144,6 +145,7 @@ const run = (
     domains: source(domains),
     monitorReader: kuma,
     monitorWriter: kuma,
+    monitorLifecycle: kuma,
     groupWriter: kuma,
     logger: silent,
   })

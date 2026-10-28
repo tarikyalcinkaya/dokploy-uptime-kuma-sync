@@ -1,6 +1,6 @@
 {
   "name": "dokploy-uptime-kuma-sync",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -19,7 +19,7 @@
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "arch": "depcruise src --validate",
     "audit:deps": "osv-scanner scan source -r .",
-    "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-exclude=\"src/**/*.test.ts\" \"src/**/*.test.ts\"",
+    "coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-exclude=\"src/**/*.test.ts\" --test-coverage-lines=95 --test-coverage-branches=94 --test-coverage-functions=93 \"src/**/*.test.ts\"",
     "test:integration": "scripts/integration.sh",
     "lint": "eslint .",
     "format:check": "prettier --check ."

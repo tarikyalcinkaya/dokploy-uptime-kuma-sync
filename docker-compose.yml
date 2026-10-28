@@ -1,9 +1,11 @@
 # Deploy this as a Docker Compose service inside Dokploy itself, on the Dokploy server.
 # That way Postgres stays private: dokploy-uptime-kuma-sync reaches it over dokploy-network as
 # `dokploy-postgres:5432` and the database never needs to be exposed.
+# The image is built by CI; the server only pulls it. The pin (vX.Y.Z@sha256:<digest>) lives in the
+# server's .env as KUMA_SYNC_TAG, not in the repo (see README, "Deploying to the server").
 services:
   dokploy-uptime-kuma-sync:
-    build: .
+    image: ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync:${KUMA_SYNC_TAG:?set KUMA_SYNC_TAG, e.g. v0.3.0@sha256:…}
     restart: unless-stopped
     environment:
       NODE_ENV: production

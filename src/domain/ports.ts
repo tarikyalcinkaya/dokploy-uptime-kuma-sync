@@ -14,6 +14,9 @@ export interface IMonitorWriter {
   createMonitor(spec: MonitorSpec): Promise<number>
   updateMonitor(id: number, spec: MonitorSpec): Promise<void>
   describeMonitor(id: number, description: string): Promise<void>
+}
+
+export interface IMonitorLifecycle {
   pauseMonitor(id: number): Promise<void>
   resumeMonitor(id: number): Promise<void>
   deleteMonitor(id: number): Promise<void>
@@ -27,4 +30,16 @@ export interface IGroupWriter {
 
 export interface INotificationSource {
   listNotifications(): Promise<Notification[]>
+}
+
+export interface Heartbeat {
+  status: 'up' | 'down'
+  message: string
+  durationMs: number
+}
+
+export interface IHeartbeatSink {
+  readonly isConfigured: boolean
+  // Never throws: a failed ping must not fail the cycle.
+  send(heartbeat: Heartbeat): Promise<void>
 }
