@@ -6,7 +6,7 @@ coverage
 .nuxt
 .output
 .next
-bin
+/bin
 obj
 target
 *.min.*
@@ -16,3 +16,6 @@ pnpm-lock.yaml
 CHANGELOG.md
 composer.json
 composer.lock
+.aux
+.claude
+CLAUDE.md
