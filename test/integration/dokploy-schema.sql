@@ -1,6 +1,10 @@
 -- The columns of Dokploy's schema (packages/server/src/db/schema) that the sync reads.
 CREATE TYPE "domainType" AS ENUM ('compose', 'application', 'preview');
 
+CREATE TYPE "applicationStatus" AS ENUM ('idle', 'running', 'done', 'error');
+
+CREATE TYPE "composeStatus" AS ENUM ('idle', 'running', 'done', 'error');
+
 CREATE TABLE project (
   "projectId" text PRIMARY KEY,
   name text NOT NULL
@@ -16,12 +20,14 @@ CREATE TABLE environment (
 CREATE TABLE application (
   "applicationId" text PRIMARY KEY,
   name text NOT NULL,
+  "applicationStatus" "applicationStatus" NOT NULL DEFAULT 'idle',
   "environmentId" text NOT NULL REFERENCES environment ("environmentId") ON DELETE CASCADE
 );
 
 CREATE TABLE compose (
   "composeId" text PRIMARY KEY,
   name text NOT NULL,
+  "composeStatus" "composeStatus" NOT NULL DEFAULT 'idle',
   "environmentId" text NOT NULL REFERENCES environment ("environmentId") ON DELETE CASCADE
 );
 

@@ -82,6 +82,11 @@ const applyPlan = async (
     logger.info({ host: domain.host, monitorId: monitor.id }, 'monitor resumed')
   }
 
+  for (const { monitor, domain } of plan.suspend) {
+    await monitors.pauseMonitor(monitor.id)
+    logger.info({ host: domain.host, monitorId: monitor.id }, 'monitor paused: service stopped')
+  }
+
   // The pause time is written first: a pause without it would never expire.
   for (const { monitor, description } of plan.stamp) {
     await monitors.describeMonitor(monitor.id, description)

@@ -9,6 +9,8 @@ export const logPlanSummary = (plan: ReconcilePlan, logger: ILogger): void => {
       create: plan.create.length,
       update: plan.update.length,
       revive: plan.revive.length,
+      suspend: plan.suspend.length,
+      stopped: plan.stopped.length,
       retire: plan.retire.length,
       expire: plan.expire.length,
       groupsCreate: plan.groups.create.length,
@@ -20,6 +22,9 @@ export const logPlanSummary = (plan: ReconcilePlan, logger: ILogger): void => {
 }
 
 export const logDryRun = (plan: ReconcilePlan, onRemove: RemovalAction, logger: ILogger): void => {
+  for (const domain of plan.stopped) {
+    logger.info({ host: domain.host, service: domain.serviceName }, 'stopped service')
+  }
   for (const { spec } of plan.groups.create) {
     logger.info({ group: spec.name }, 'would create group')
   }
@@ -34,6 +39,9 @@ export const logDryRun = (plan: ReconcilePlan, onRemove: RemovalAction, logger: 
   }
   for (const { domain, monitor } of plan.revive) {
     logger.info({ host: domain.host, monitorId: monitor.id }, 'would resume')
+  }
+  for (const { domain, monitor } of plan.suspend) {
+    logger.info({ host: domain.host, monitorId: monitor.id }, 'would pause stopped service')
   }
   for (const monitor of plan.retire) {
     logger.info({ name: monitor.name }, `would ${onRemove}`)

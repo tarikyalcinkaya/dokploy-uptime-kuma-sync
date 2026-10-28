@@ -106,6 +106,7 @@ const domain = (
   projectId: 'p1',
   projectName: 'proj',
   middlewares,
+  isStopped: false,
 })
 
 const managed = (id: number, domainId: string, overrides: Partial<Monitor> = {}): Monitor => ({
@@ -187,6 +188,12 @@ describe('reconcileMonitors', () => {
       ['updateMonitor', 1, 'https://elsewhere.example.com'],
       ['resumeMonitor', 2],
     ])
+  })
+
+  it('pauses a stopped service without stamping a pause time', async () => {
+    const kuma = new FakeKuma([managed(1, 'keep'), managed(2, 'idle')])
+    await run(kuma, [domain('keep'), { ...domain('idle'), isStopped: true }])
+    assert.deepEqual(kuma.calls, [['pauseMonitor', 2]])
   })
 
   it('pauses a retired monitor by default, keeping its history', async () => {
