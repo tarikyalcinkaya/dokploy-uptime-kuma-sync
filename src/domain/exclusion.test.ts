@@ -15,6 +15,7 @@ const domain = (overrides: Partial<DokployDomain> = {}): DokployDomain => ({
   projectId: 'p1',
   projectName: 'proj',
   middlewares: [],
+  isStopped: false,
   ...overrides,
 })
 

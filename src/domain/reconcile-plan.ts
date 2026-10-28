@@ -56,9 +56,11 @@ export interface ReconcilePlan {
   create: PlannedMonitor[]
   update: PlannedChange[]
   revive: PlannedChange[]
+  suspend: PlannedChange[]
   retire: Monitor[]
   stamp: StampedMonitor[]
   expire: Monitor[]
+  stopped: DokployDomain[]
   managedCount: number
   domainCount: number
 }
@@ -178,8 +180,9 @@ export const buildPlan = (
   const managed = findManagedMonitors(monitors)
   const domains = uniqueEndpoints(allDomains, options.rules, new Set(managed.keys()))
   const groups = findManagedGroups(monitors)
+  const watched = domains.filter((domain) => !domain.isStopped || managed.has(domain.domainId))
   const groupPlan = buildGroupPlan(
-    domains,
+    watched,
     groups,
     options.isGrouped,
     options.settings.intervalSeconds,
@@ -189,9 +192,11 @@ export const buildPlan = (
     create: [],
     update: [],
     revive: [],
+    suspend: [],
     retire: [],
     stamp: [],
     expire: [],
+    stopped: domains.filter((domain) => domain.isStopped),
     managedCount: managed.size,
     domainCount: domains.length,
   }
@@ -203,11 +208,17 @@ export const buildPlan = (
     const monitor = managed.get(domain.domainId)
 
     if (!monitor) {
-      plan.create.push(planned)
+      if (!domain.isStopped) {
+        plan.create.push(planned)
+      }
       continue
     }
-    // A paused monitor whose domain is back in Dokploy has to be resumed, not just edited.
-    if (!monitor.isActive) {
+    // A stopped service is a planned outage, not a removal: the monitor keeps its history and no expiry clock runs.
+    if (domain.isStopped) {
+      if (monitor.isActive) {
+        plan.suspend.push({ ...planned, monitor })
+      }
+    } else if (!monitor.isActive) {
       plan.revive.push({ ...planned, monitor })
     }
     if (needsUpdate(monitor, planned)) {
@@ -238,7 +249,7 @@ export const buildPlan = (
   }
 
   const wantedKeys = new Set(
-    domains
+    watched
       .map((domain) => groupKeyOf(domain, options.isGrouped))
       .filter((key): key is string => key !== null),
   )

@@ -9,6 +9,9 @@ import { DB_STATEMENT_TIMEOUT_MS, DB_TIMEOUT_SECONDS } from '../timeouts.js'
 // Preview domains come and go with pull requests and would fill Kuma with monitors that die within days.
 type Sql = ReturnType<typeof postgres>
 
+// Dokploy keeps `idle` for a service that was stopped or never deployed; `error` is a real failure and stays watched.
+const STOPPED_STATUS = 'idle'
+
 const queryDomains = (sql: Sql) => sql`
 	SELECT
 		d."domainId"      AS "domainId",
@@ -21,6 +24,7 @@ const queryDomains = (sql: Sql) => sql`
 		(to_jsonb(e)->>'isDefault')::boolean AS "isDefaultEnvironment",
 		p."projectId"     AS "projectId",
 		p.name            AS "projectName",
+		COALESCE(to_jsonb(a)->>'applicationStatus', to_jsonb(c)->>'composeStatus') AS "serviceStatus",
 		COALESCE(to_jsonb(d)->'middlewares', '[]'::jsonb) AS middlewares
 	FROM domain d
 	LEFT JOIN application a ON a."applicationId" = d."applicationId"
@@ -45,15 +49,21 @@ const domainRowSchema = z.object({
   isDefaultEnvironment: z.boolean().nullable(),
   projectId: z.string().nullable(),
   projectName: z.string().nullable(),
+  serviceStatus: z.string().nullable(),
   middlewares: z
     .array(z.string())
     .nullable()
     .transform((value) => value ?? []),
 })
 
-const toDomain = ({ https, ...row }: z.infer<typeof domainRowSchema>): DokployDomain => ({
+const toDomain = ({
+  https,
+  serviceStatus,
+  ...row
+}: z.infer<typeof domainRowSchema>): DokployDomain => ({
   ...row,
   isHttps: https,
+  isStopped: serviceStatus === STOPPED_STATUS,
 })
 
 export class PostgresDomainSource implements IDomainSource {

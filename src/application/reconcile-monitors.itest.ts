@@ -92,6 +92,40 @@ describe('reconcileMonitors end to end', () => {
     assert.deepEqual(counts(await cycle()), { create: 0, update: 0, revive: 0, retire: 0 })
   })
 
+  it('pauses a stopped service, keeps its history and resumes it when it runs again', async () => {
+    const withStatus = (status: 'idle' | 'done'): SeedService => ({
+      ...service(['a', 'b']),
+      status,
+    })
+    await seedDokploy([withStatus('done')])
+    await cycle()
+
+    await seedDokploy([withStatus('idle')])
+    const stopped = await cycle()
+    assert.equal(stopped.suspend.length, 2)
+    assert.equal(stopped.retire.length, 0)
+    const paused = await listMonitors()
+    const children = paused.filter((monitor) => !monitor.isGroup)
+    assert.equal(children.length, 2)
+    assert.equal(
+      children.every((monitor) => !monitor.isActive),
+      true,
+    )
+    assert.equal(
+      children.some((monitor) => /pausedAt/.test(monitor.description ?? '')),
+      false,
+    )
+    assert.equal(paused.find((monitor) => monitor.isGroup)?.isActive, true)
+
+    const again = await cycle()
+    assert.deepEqual(counts(again), { create: 0, update: 0, revive: 0, retire: 0 })
+    assert.equal(again.suspend.length, 0)
+
+    await seedDokploy([withStatus('done')])
+    assert.equal((await cycle()).revive.length, 2)
+    assert.equal((await listMonitors()).filter((monitor) => !monitor.isActive).length, 0)
+  })
+
   it('builds one group per project and puts each domain under its own', async () => {
     await seedDokploy([service(['a', 'b'], 'p1'), service(['c'], 'p2')])
     await cycle()

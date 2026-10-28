@@ -118,6 +118,7 @@ export interface SeedService {
   kind: 'application' | 'compose'
   serviceId: string
   serviceName: string
+  status?: 'idle' | 'running' | 'done' | 'error'
   domains: SeedDomain[]
 }
 
@@ -134,8 +135,9 @@ export const seedDokploy = (services: SeedService[]): Promise<void> =>
         ON CONFLICT DO NOTHING`
       const table = service.kind
       const idColumn = service.kind === 'application' ? 'applicationId' : 'composeId'
-      await sql`INSERT INTO ${sql(table)} (${sql(idColumn)}, name, "environmentId")
-        VALUES (${service.serviceId}, ${service.serviceName}, ${environmentId})`
+      const statusColumn = service.kind === 'application' ? 'applicationStatus' : 'composeStatus'
+      await sql`INSERT INTO ${sql(table)} (${sql(idColumn)}, name, ${sql(statusColumn)}, "environmentId")
+        VALUES (${service.serviceId}, ${service.serviceName}, ${service.status ?? 'done'}, ${environmentId})`
       for (const [domainIndex, domain] of service.domains.entries()) {
         await sql`INSERT INTO domain ("domainId", host, https, path, "domainType", "createdAt",
             ${sql(idColumn)}, "previewDeploymentId", middlewares)

@@ -38,6 +38,7 @@ const domain = (overrides: Partial<DokployDomain> = {}): DokployDomain => ({
   projectId: 'p1',
   projectName: 'proj',
   middlewares: [],
+  isStopped: false,
   ...overrides,
 })
 
@@ -103,6 +104,80 @@ const group = (overrides: Partial<Monitor> = {}): Monitor => ({
   acceptedStatusCodes: ['200-299'],
   settings,
   ...overrides,
+})
+
+describe('buildPlan with stopped services', () => {
+  const stopped = domain({ isStopped: true })
+  const pausedMonitor = (description = describeOwnership('dom1')) =>
+    monitor({ isActive: false, description })
+
+  it('pauses an active monitor instead of retiring it and starts no expiry clock', () => {
+    const plan = buildPlan([stopped], [monitor()], flat)
+    assert.equal(plan.suspend.length, 1)
+    assert.deepEqual([plan.retire.length, plan.stamp.length, plan.expire.length], [0, 0, 0])
+    assert.equal(plan.stopped.length, 1)
+  })
+
+  it('creates no monitor for a stopped service that has none', () => {
+    const plan = buildPlan([stopped], [], flat)
+    assert.deepEqual([plan.create.length, plan.suspend.length], [0, 0])
+    assert.equal(plan.stopped.length, 1)
+  })
+
+  it('leaves an already paused monitor alone', () => {
+    const plan = buildPlan([stopped], [pausedMonitor()], flat)
+    assert.deepEqual(
+      [plan.suspend.length, plan.revive.length, plan.update.length, plan.stamp.length],
+      [0, 0, 0, 0],
+    )
+  })
+
+  it('never expires a paused monitor of a stopped service and drops its pause stamp', () => {
+    const old = describeOwnership('dom1', new Date('2026-01-01T00:00:00Z'))
+    const plan = buildPlan([stopped], [pausedMonitor(old)], flat)
+    assert.equal(plan.expire.length, 0)
+    assert.equal(plan.update.length, 1)
+    assert.equal(plan.update[0]?.spec.description, describeOwnership('dom1'))
+  })
+
+  it('resumes the monitor once the service runs again', () => {
+    const plan = buildPlan([domain()], [pausedMonitor()], flat)
+    assert.equal(plan.revive.length, 1)
+    assert.equal(plan.suspend.length, 0)
+  })
+
+  it('does not count stopped services as retirements for the guard', () => {
+    const domains = ['a', 'b', 'c', 'd'].map((id) =>
+      domain({ domainId: id, host: `${id}.x.com`, isStopped: true }),
+    )
+    const monitors = domains.map((d, index) =>
+      monitor({ id: index + 1, description: describeOwnership(d.domainId) }),
+    )
+    const plan = buildPlan(domains, monitors, flat)
+    assert.equal(plan.suspend.length, 4)
+    assert.equal(findGuardViolation(plan, 0.5), null)
+  })
+
+  it('never pauses a project group and creates none for a fully stopped project', () => {
+    const none = buildPlan([stopped], [], grouped)
+    assert.equal(none.groups.create.length, 0)
+
+    const group = monitor({
+      id: 9,
+      name: 'proj',
+      isGroup: true,
+      description: describeGroupOwnership('p1'),
+    })
+    const child = monitor({ id: 10, parentId: 9 })
+    const plan = buildPlan([stopped], [group, child], grouped)
+    assert.equal(plan.suspend.length, 1)
+    assert.equal(plan.suspend[0]?.monitor.id, 10)
+    assert.equal(plan.groups.retire.length, 0)
+    assert.equal(
+      plan.suspend.some(({ monitor: m }) => m.isGroup),
+      false,
+    )
+  })
 })
 
 describe('buildPlan settings propagation', () => {
