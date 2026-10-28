@@ -1,0 +1,5 @@
+#!/bin/sh
+# Install: ln -sf ../../scripts/pre-push .git/hooks/pre-push (never set core.hooksPath).
+set -eu
+cd "$(dirname "$0")/.."
+exec mise run check

@@ -2,3 +2,13 @@
 node = "26.12.0"
 osv-scanner = "2.7.0"
 pnpm = "11.28.6"
+
+[tasks.check]
+description = "Local gate (DEC-570): format, typecheck, lint, architecture, unit tests. No network."
+run = [
+  "pnpm format:check",
+  "pnpm typecheck",
+  "pnpm lint",
+  "pnpm arch",
+  "pnpm test",
+]
