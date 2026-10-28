@@ -1,12 +1,9 @@
 import type { ILogger } from '../application/logger.js'
+import type { Heartbeat, IHeartbeatSink } from '../domain/ports.js'
 import { errorMessage } from '../shared/errors.js'
 import { HEARTBEAT_TIMEOUT_MS } from './timeouts.js'
 
-export interface Heartbeat {
-  status: 'up' | 'down'
-  message: string
-  durationMs: number
-}
+export type { Heartbeat }
 
 // Kuma truncates long push messages; keep them readable in the monitor's event list.
 const MAX_MESSAGE_LENGTH = 200
@@ -45,5 +42,23 @@ export const sendHeartbeat = async (
     logger.debug({ status: heartbeat.status }, 'heartbeat sent')
   } catch (error) {
     logger.warn({ err: errorMessage(error) }, 'could not send heartbeat')
+  }
+}
+
+export class PushHeartbeatSink implements IHeartbeatSink {
+  readonly #pushUrl: string | undefined
+  readonly #logger: ILogger
+
+  constructor(pushUrl: string | undefined, logger: ILogger) {
+    this.#pushUrl = pushUrl
+    this.#logger = logger
+  }
+
+  get isConfigured(): boolean {
+    return Boolean(this.#pushUrl)
+  }
+
+  send(heartbeat: Heartbeat): Promise<void> {
+    return sendHeartbeat(this.#pushUrl, heartbeat, this.#logger)
   }
 }

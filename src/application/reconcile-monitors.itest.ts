@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import { beforeEach, describe, it } from 'node:test'
+import { closeDokploy, connectDokploy } from '../infrastructure/dokploy/postgres-client.js'
 import { PostgresDomainSource } from '../infrastructure/dokploy/postgres-domain-source.js'
 import {
   KumaGroupWriter,
+  KumaMonitorLifecycle,
   KumaMonitorReader,
   KumaMonitorWriter,
 } from '../infrastructure/kuma/kuma-monitors.js'
@@ -35,18 +37,24 @@ const input: ReconcileMonitorsInput = {
 }
 
 const cycle = (overrides: Partial<ReconcileMonitorsInput> = {}) =>
-  withKuma((session) =>
-    reconcileMonitors(
-      { ...input, ...overrides },
-      {
-        domains: new PostgresDomainSource(databaseUrl()),
-        monitorReader: new KumaMonitorReader(session),
-        monitorWriter: new KumaMonitorWriter(session),
-        groupWriter: new KumaGroupWriter(session),
-        logger: silentLogger,
-      },
-    ),
-  )
+  withKuma(async (session) => {
+    const sql = connectDokploy(databaseUrl())
+    try {
+      return await reconcileMonitors(
+        { ...input, ...overrides },
+        {
+          domains: new PostgresDomainSource(sql),
+          monitorReader: new KumaMonitorReader(session),
+          monitorWriter: new KumaMonitorWriter(session),
+          monitorLifecycle: new KumaMonitorLifecycle(session),
+          groupWriter: new KumaGroupWriter(session),
+          logger: silentLogger,
+        },
+      )
+    } finally {
+      await closeDokploy(sql)
+    }
+  })
 
 const service = (domainIds: string[], projectId = 'p1'): SeedService => ({
   projectId,

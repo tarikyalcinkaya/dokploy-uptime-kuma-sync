@@ -1,11 +1,14 @@
 import type { ILogger } from './application/logger.js'
+import { runMonitoredCycle } from './application/run-monitored-cycle.js'
 import { reconcileMonitors, type ReconcileMonitorsInput } from './application/reconcile-monitors.js'
 import { type Config, loadConfig, toExclusions } from './infrastructure/config.js'
+import { closeDokploy, connectDokploy } from './infrastructure/dokploy/postgres-client.js'
 import { PostgresDomainSource } from './infrastructure/dokploy/postgres-domain-source.js'
-import { sendHeartbeat } from './infrastructure/heartbeat.js'
+import { PushHeartbeatSink } from './infrastructure/heartbeat.js'
 import { markAlive } from './infrastructure/liveness.js'
 import {
   KumaGroupWriter,
+  KumaMonitorLifecycle,
   KumaMonitorReader,
   KumaMonitorWriter,
 } from './infrastructure/kuma/kuma-monitors.js'
@@ -59,41 +62,27 @@ const cycle = async (config: Config, logger: ILogger): Promise<void> => {
     logger,
   )
 
-  // A dry run applies nothing, so reporting it healthy would keep a forgotten DRY_RUN green forever.
-  const pushUrl = config.DRY_RUN ? undefined : config.KUMA_PUSH_URL
-  if (config.DRY_RUN && config.KUMA_PUSH_URL) {
-    logger.debug('dry run — heartbeat skipped')
-  }
-  const startedAt = performance.now()
-
   try {
-    await session.open()
-    const plan = await reconcileMonitors(toReconcileInput(config), {
-      domains: new PostgresDomainSource(config.DATABASE_URL),
-      monitorReader: new KumaMonitorReader(session),
-      monitorWriter: new KumaMonitorWriter(session),
-      groupWriter: new KumaGroupWriter(session),
-      logger,
-    })
-
-    await sendHeartbeat(
-      pushUrl,
-      {
-        status: 'up',
-        message: `created=${plan.create.length} updated=${plan.update.length} retired=${plan.retire.length} managed=${plan.managedCount}`,
-        durationMs: performance.now() - startedAt,
+    await runMonitoredCycle(
+      config.DRY_RUN,
+      { heartbeat: new PushHeartbeatSink(config.KUMA_PUSH_URL, logger), logger },
+      async () => {
+        await session.open()
+        const sql = connectDokploy(config.DATABASE_URL)
+        try {
+          return await reconcileMonitors(toReconcileInput(config), {
+            domains: new PostgresDomainSource(sql),
+            monitorReader: new KumaMonitorReader(session),
+            monitorWriter: new KumaMonitorWriter(session),
+            monitorLifecycle: new KumaMonitorLifecycle(session),
+            groupWriter: new KumaGroupWriter(session),
+            logger,
+          })
+        } finally {
+          await closeDokploy(sql)
+        }
       },
-      logger,
     )
-  } catch (error) {
-    // Report actively instead of waiting for Kuma's push timeout; if Kuma itself is down the
-    // ping fails too and the timeout covers us.
-    await sendHeartbeat(
-      pushUrl,
-      { status: 'down', message: errorMessage(error), durationMs: performance.now() - startedAt },
-      logger,
-    )
-    throw error
   } finally {
     session.close()
   }

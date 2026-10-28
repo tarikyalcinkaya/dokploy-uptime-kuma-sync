@@ -1,12 +1,23 @@
-import type { Monitor } from '../domain/monitor.js'
-import type { Notification } from '../domain/notification.js'
 import { isManaged } from '../domain/ownership.js'
 import type { IMonitorReader, INotificationSource } from '../domain/ports.js'
 
+export interface NotificationDto {
+  id: number
+  name: string
+  isActive: boolean
+}
+
+export interface ManagedMonitorDto {
+  id: number
+  name: string
+  url: string | null
+  isActive: boolean
+}
+
 export interface KumaInventoryDto {
-  notifications: Notification[]
+  notifications: NotificationDto[]
   monitorCount: number
-  managedMonitors: Monitor[]
+  managedMonitors: ManagedMonitorDto[]
 }
 
 export const inspectKuma = async (
@@ -18,8 +29,10 @@ export const inspectKuma = async (
     notifications.listNotifications(),
   ])
   return {
-    notifications: allNotifications,
+    notifications: allNotifications.map(({ id, name, isActive }) => ({ id, name, isActive })),
     monitorCount: allMonitors.length,
-    managedMonitors: allMonitors.filter(isManaged),
+    managedMonitors: allMonitors
+      .filter(isManaged)
+      .map(({ id, name, url, isActive }) => ({ id, name, url, isActive })),
   }
 }

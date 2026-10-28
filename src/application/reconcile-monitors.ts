@@ -4,6 +4,7 @@ import type { MonitorSettings, MonitorSpec } from '../domain/monitor.js'
 import type {
   IDomainSource,
   IGroupWriter,
+  IMonitorLifecycle,
   IMonitorReader,
   IMonitorWriter,
 } from '../domain/ports.js'
@@ -16,6 +17,7 @@ import {
 } from '../domain/reconcile-plan.js'
 import type { ILogger } from './logger.js'
 import { logDryRun, logPlanSummary } from './plan-report.js'
+import { type ReconcileReportDto, toReconcileReport } from './reconcile-report.js'
 
 export interface ReconcileMonitorsInput {
   isDryRun: boolean
@@ -33,6 +35,7 @@ export interface ReconcileMonitorsDeps {
   domains: IDomainSource
   monitorReader: IMonitorReader
   monitorWriter: IMonitorWriter
+  monitorLifecycle: IMonitorLifecycle
   groupWriter: IGroupWriter
   logger: ILogger
 }
@@ -64,7 +67,7 @@ const applyPlan = async (
   onRemove: RemovalAction,
   deps: ReconcileMonitorsDeps,
 ): Promise<void> => {
-  const { monitorWriter: monitors, groupWriter, logger } = deps
+  const { monitorWriter: monitors, monitorLifecycle: lifecycle, groupWriter, logger } = deps
   const groupIds = await applyGroups(plan, deps)
 
   for (const planned of plan.create) {
@@ -78,12 +81,12 @@ const applyPlan = async (
   }
 
   for (const { monitor, domain } of plan.revive) {
-    await monitors.resumeMonitor(monitor.id)
+    await lifecycle.resumeMonitor(monitor.id)
     logger.info({ host: domain.host, monitorId: monitor.id }, 'monitor resumed')
   }
 
   for (const { monitor, domain } of plan.suspend) {
-    await monitors.pauseMonitor(monitor.id)
+    await lifecycle.pauseMonitor(monitor.id)
     logger.info({ host: domain.host, monitorId: monitor.id }, 'monitor paused: service stopped')
   }
 
@@ -94,16 +97,16 @@ const applyPlan = async (
 
   for (const monitor of plan.retire) {
     if (onRemove === 'delete') {
-      await monitors.deleteMonitor(monitor.id)
+      await lifecycle.deleteMonitor(monitor.id)
       logger.info({ monitorId: monitor.id, name: monitor.name }, 'monitor deleted')
     } else {
-      await monitors.pauseMonitor(monitor.id)
+      await lifecycle.pauseMonitor(monitor.id)
       logger.info({ monitorId: monitor.id, name: monitor.name }, 'monitor paused')
     }
   }
 
   for (const monitor of plan.expire) {
-    await monitors.deleteMonitor(monitor.id)
+    await lifecycle.deleteMonitor(monitor.id)
     logger.info({ monitorId: monitor.id, name: monitor.name }, 'expired paused monitor deleted')
   }
 
@@ -117,7 +120,7 @@ const applyPlan = async (
 export const reconcileMonitors = async (
   input: ReconcileMonitorsInput,
   deps: ReconcileMonitorsDeps,
-): Promise<ReconcilePlan> => {
+): Promise<ReconcileReportDto> => {
   const [allDomains, monitors] = await Promise.all([
     deps.domains.listDomains(),
     deps.monitorReader.listMonitors(),
@@ -145,9 +148,9 @@ export const reconcileMonitors = async (
 
   if (input.isDryRun) {
     logDryRun(plan, input.onRemove, deps.logger)
-    return plan
+    return toReconcileReport(plan)
   }
 
   await applyPlan(plan, input.onRemove, deps)
-  return plan
+  return toReconcileReport(plan)
 }
