@@ -70,7 +70,8 @@ laptop.
 `docker-compose.yml` sets up:
 
 ```bash
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose ps
 docker compose logs -f
 ```
@@ -169,6 +170,30 @@ See `.env.example`. Worth calling out:
 | `EXCLUDE_HOSTS`            | Host patterns to skip, e.g. `autodiscover.*`. Also `EXCLUDE_PROJECTS` and `EXCLUDE_SERVICES` by name.                        |
 | `MONITOR_INTERVAL_SECONDS` | 120 for a project's default environment; `MONITOR_INTERVAL_SECONDS_OTHER_ENVS` (300) for the rest.                           |
 | `MONITOR_TIMEOUT_SECONDS`  | Must stay below both intervals; Kuma rejects the monitor otherwise.                                                          |
+
+## Deploying to the server
+
+CI builds the image on every push to `main` and publishes it to
+`ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync` (tags `:<short-sha>`, `:main`, `:vX.Y.Z`). The server
+never builds; `docker-compose.yml` pins the release tag **and** its index digest, so a moved tag cannot
+change what runs.
+
+Update:
+
+```bash
+git fetch && git checkout --detach <sha>   # the commit whose docker-compose.yml pins the new digest
+docker compose pull
+docker compose run --rm -e DRY_RUN=true -e RUN_MODE=once dokploy-uptime-kuma-sync   # read the plan
+docker compose up -d
+docker compose ps
+```
+
+Roll back: check out the previous commit (or set `image:` back to the previous `:vX.Y.Z@sha256:…`),
+then `docker compose pull && docker compose up -d`.
+
+Pinning a new release: after the `main` pipeline finishes, copy the digest from the `docker` job summary
+(or `docker buildx imagetools inspect ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync:vX.Y.Z`) into the
+`image:` line as `:vX.Y.Z@sha256:<digest>` and commit it.
 
 ## Upgrading an existing install
 
