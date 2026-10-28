@@ -1,5 +1,5 @@
 import { type DokployDomain, toMonitorName, toMonitorUrl } from './dokploy-domain.js'
-import { uniqueEndpoints } from './endpoint.js'
+import { isWatched, uniqueEndpoints } from './endpoint.js'
 import {
   buildGroupPlan,
   findManagedGroups,
@@ -68,9 +68,10 @@ export const buildPlan = (
   options: PlanOptions,
 ): ReconcilePlan => {
   const managed = findManagedMonitors(monitors)
-  const domains = uniqueEndpoints(allDomains, options.rules, new Set(managed.keys()))
+  const ownedIds = new Set(managed.keys())
+  const domains = uniqueEndpoints(allDomains, options.rules.healthPaths, ownedIds)
   const groups = findManagedGroups(monitors)
-  const watched = domains.filter((domain) => !domain.isStopped || managed.has(domain.domainId))
+  const watched = domains.filter((domain) => isWatched(domain, ownedIds))
   const groupPlan = buildGroupPlan(
     watched,
     groups,
