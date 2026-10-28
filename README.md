@@ -177,25 +177,27 @@ See `.env.example`. Worth calling out:
 
 CI builds the image on every push to `main` and publishes it to
 `ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync` (tags `:<short-sha>`, `:main`, `:vX.Y.Z`). The server
-never builds; `docker-compose.yml` pins the release tag **and** its index digest, so a moved tag cannot
-change what runs.
+never builds. The pin is not in the repo: `docker-compose.yml` reads `KUMA_SYNC_TAG` from the server's
+`.env` (`vX.Y.Z@sha256:<index digest>`), so a moved tag cannot change what runs and a release needs no
+commit to deploy. Compose refuses to start without it.
+
+First time: add `KUMA_SYNC_TAG=v0.2.0@sha256:79e766bba889f5269d3e0687b65f2e6ad89e5f217cdc3a402983ccd9366ffc9a`
+to `.env`.
 
 Update:
 
+1. Get the new release's digest from the GitHub Release notes, the `docker` job summary, or
+   `docker buildx imagetools inspect ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync:vX.Y.Z`.
+2. Set `KUMA_SYNC_TAG=vX.Y.Z@sha256:<digest>` in `.env`.
+
 ```bash
-git fetch && git checkout --detach <sha>   # the commit whose docker-compose.yml pins the new digest
 docker compose pull
 docker compose run --rm -e DRY_RUN=true -e RUN_MODE=once dokploy-uptime-kuma-sync   # read the plan
 docker compose up -d
 docker compose ps
 ```
 
-Roll back: check out the previous commit (or set `image:` back to the previous `:vX.Y.Z@sha256:…`),
-then `docker compose pull && docker compose up -d`.
-
-Pinning a new release: after the `main` pipeline finishes, copy the digest from the `docker` job summary
-(or `docker buildx imagetools inspect ghcr.io/tarikyalcinkaya/dokploy-uptime-kuma-sync:vX.Y.Z`) into the
-`image:` line as `:vX.Y.Z@sha256:<digest>` and commit it.
+Roll back: set `KUMA_SYNC_TAG` back to the previous value, then `docker compose pull && docker compose up -d`.
 
 ## Upgrading an existing install
 

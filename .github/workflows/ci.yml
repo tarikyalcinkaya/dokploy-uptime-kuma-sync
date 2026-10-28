@@ -105,6 +105,6 @@ jobs:
             exit 0
           fi
           docker buildx imagetools create --tag "$IMAGE:$version" "$IMAGE@$DIGEST"
-          gh release create "$version" --target "$GITHUB_SHA" --generate-notes \
-            --notes "Image: \`$IMAGE:$version\` (\`$DIGEST\`)"
+          notes="Image: \`$IMAGE:$version\` (\`$DIGEST\`)"$'\n\n'"Server pin: \`KUMA_SYNC_TAG=$version@$DIGEST\`"
+          gh release create "$version" --target "$GITHUB_SHA" --generate-notes --notes "$notes"
           echo "released $version as $IMAGE@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
