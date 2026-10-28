@@ -5,13 +5,12 @@ import type { IDomainSource } from '../../domain/ports.js'
 import { errorMessage } from '../../shared/errors.js'
 import { DB_STATEMENT_TIMEOUT_MS, DB_TIMEOUT_SECONDS } from '../timeouts.js'
 
-// `to_jsonb` reads columns that older Dokploy releases lack as NULL instead of failing the query.
-// Preview domains come and go with pull requests and would fill Kuma with monitors that die within days.
 type Sql = ReturnType<typeof postgres>
 
 // Dokploy keeps `idle` for a service that was stopped or never deployed; `error` is a real failure and stays watched.
 const STOPPED_STATUS = 'idle'
 
+// `to_jsonb` reads columns that older Dokploy releases lack as NULL instead of failing the query.
 const queryDomains = (sql: Sql) => sql`
 	SELECT
 		d."domainId"      AS "domainId",
@@ -101,6 +100,7 @@ export class PostgresDomainSource implements IDomainSource {
           statement_timeout: this.#statementTimeoutMs,
           default_transaction_read_only: true,
         },
+        // Read-only SELECTs; keeps postgres.js from echoing server notices to the console.
         onnotice: () => undefined,
       })
     } catch (error) {
