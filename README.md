@@ -138,6 +138,21 @@ ping fails too — and the missed heartbeat alerts you anyway.
 Heartbeats are **skipped while `DRY_RUN=true`**. A dry run applies nothing, so reporting it as healthy
 would let a forgotten `DRY_RUN=true` look green forever while no monitor is ever created.
 
+## Local gate and CI
+
+`mise run check` is the local gate: Prettier check, incremental `tsc`, ESLint, dependency-cruiser and
+the unit tests. It needs no network and runs in about ten seconds. Wire it to `pre-push` without
+touching `core.hooksPath`:
+
+```bash
+ln -sf ../../scripts/pre-push .git/hooks/pre-push
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the same task, then `pnpm test:integration`, then
+builds the image. Pushes to `main` publish `ghcr.io/<owner>/<repo>:<short-sha>` and `:main`, print the
+digest in the job summary and, when `package.json` carries a version without a release yet, create the
+`vX.Y.Z` tag, the GitHub Release and the `:vX.Y.Z` image tag. Tags are never created by hand.
+
 ## Configuration
 
 See `.env.example`. Worth calling out:

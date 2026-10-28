@@ -31,7 +31,7 @@ const normalise = (env: Env): Record<string, string> =>
   Object.fromEntries(
     Object.entries(env)
       .filter((entry): entry is [string, string] => entry[1] !== undefined)
-      .map(([key, value]) => [key, unquote(value)])
+      .map(([key, value]): [string, string] => [key, unquote(value)])
       .filter(([, value]) => value !== ''),
   )
 

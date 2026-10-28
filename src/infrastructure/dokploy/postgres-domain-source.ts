@@ -109,6 +109,7 @@ export class PostgresDomainSource implements IDomainSource {
           '1) quotes — `docker run --env-file` does not strip them, so write the line unquoted; ' +
           '2) special characters in the password, which must be percent-encoded ' +
           '(@ = %40, # = %23, : = %3A, / = %2F, ? = %3F).',
+        { cause: error },
       )
     }
   }
